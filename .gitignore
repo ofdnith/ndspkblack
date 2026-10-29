@@ -1,0 +1,43 @@
+# --- Nada derivado da ROM, BIOS ou firmware entra no git ---
+local/
+*.nds
+*.srl
+*.dsi
+*.rom
+*.bin
+*.sav
+*.dsv
+*.mst
+*.ml[0-9]
+*.state
+
+# Extraídos / gerados / builds
+extracted/
+generated/
+build/
+build-*/
+out/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.elf
+*.self
+*.pkg
+
+# Capturas do jogo (testes guardam só hashes)
+*.png
+*.webp
+*.mp4
+*.mov
+*.wav
+captures/
+
+# Sistema / editores
+.DS_Store
+__pycache__/
+*.pyc
+.vscode/
+.idea/

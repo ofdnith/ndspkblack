@@ -1,0 +1,6 @@
+[submodule "third_party/ndsrecomp"]
+	path = third_party/ndsrecomp
+	url = https://github.com/RetroPortingToolKit/ndsrecomp
+[submodule "third_party/pokeblack"]
+	path = third_party/pokeblack
+	url = https://github.com/squiddonaut/pokeblack

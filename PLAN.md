@@ -29,14 +29,14 @@ qualquer arquivo derivado da ROM.
 
 ## Fase 1A — Fundação do build (M1)
 - [x] Submódulos ndsrecomp e pokeblack fixados num commit
-- [ ] Compilar recompilador e testes no workspace
-- [ ] Compilar recompilador e testes no Mac (valida Apple Silicon)
-- [ ] Compilar o oráculo melonDS
-- [ ] Boot `--freebios --generated-firmware --boot direct`, headless, como padrão
-- [ ] Extrator: cabeçalho, ARM9, ARM7, overlays (BLZ), sistema de arquivos
-- [ ] Importador de símbolos: rótulos do asm/ da decomp → entradas de função nos TOMLs
-- [ ] Primeira passada do `nds_recompile` no ARM9 principal e no ARM7
-- [ ] **Pronto quando:** o C gerado compila e o build roda do zero com um único script
+- [x] Compilar recompilador e testes no workspace (ctest 6/6)
+- [ ] Compilar recompilador e testes no Mac (valida Apple Silicon) — parcial: ctest 6/6 na VM Linux aarch64 do Mac; falta macOS nativo
+- [x] Compilar o oráculo melonDS (com patch próprio para FreeBIOS + boot direto)
+- [x] Boot `--freebios --generated-firmware --boot direct`, headless, como padrão (interpretador: 610 VBlanks idênticos ao oráculo)
+- [x] Extrator: cabeçalho, ARM9, ARM7, overlays (BLZ), sistema de arquivos (conferido com ndspy + golden)
+- [x] Importador de símbolos: rótulos do asm/ da decomp → entradas de função nos TOMLs (29.020)
+- [x] Primeira passada do `nds_recompile` no ARM9 principal e no ARM7 (C compila e linka no runner)
+- [x] **Pronto quando:** o C gerado compila e o build roda do zero com um único script (clone limpo, 18 min, tag `m1-build`)
 
 ## Fase 1B — Teste de fumaça no PS5 (paralela)
 - [ ] App mínimo do boilerplate nativo: janela SDL2 com padrão de teste, DualSense, gravação em `/download0`
@@ -45,10 +45,11 @@ qualquer arquivo derivado da ROM.
 
 ## Fase 2 — Até a tela título (M2)
 - [ ] Runner com bancos do título (`NDS_TITLE_BANK_DIR` + SHA-1)
+- [ ] Corrigir laço em 0x600000D2 com bancos do título (bug nº 1)
 - [ ] Rodar em modo DS
 - [ ] Overlays pelo interpretador de fallback, depois recompilados um a um
 - [ ] Ciclo de divergência com `find_first_diverge`
-- [ ] Investigar checagens antipirataria do protocolo de cartucho
+- [ ] Investigar checagens antipirataria do protocolo de cartucho (chip ID difere do melonDS: 0x0000FFC2 × 0x4000FFC2)
 - [ ] **Pronto quando:** tela título aparece e o quadro bate com o melonDS
 
 ## Fase 3 — Novo jogo e primeira batalha (M3)

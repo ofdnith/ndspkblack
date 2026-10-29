@@ -80,6 +80,7 @@ rm -rf "$GEN_BASE" "$GEN_TITLE"; mkdir -p "$GEN_BASE" "$GEN_TITLE"
   --out "$GEN_TITLE" --bank pkb_arm9_main --shards 48
 "$RECOMP" --config "$LOCAL/config/pkb_arm7_main.toml" --bin "$LOCAL/extracted/arm7.bin" \
   --out "$GEN_TITLE" --bank pkb_arm7_main --shards 4
+"$REPO/tests/test_codegen.sh"
 
 step "8/8 Runner (SDL=$SDL) com bancos do título"
 RB="$BUILD/runner-title-$(echo "$SDL" | tr 'A-Z' 'a-z')"

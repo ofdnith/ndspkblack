@@ -2,7 +2,7 @@
 # Build do zero do ndspkblack (Fase 1A): verifica a ROM, aplica patches,
 # compila o recompilador, gera FreeBIOS e bancos do título, compila o runner.
 #
-# Uso: tools/bootstrap.sh [--rom caminho.nds] [--sdl NONE|SDL3|SDL2] [--jobs N]
+# Uso: tools/bootstrap.sh [--rom caminho.nds] [--sdl NONE|SDL3|SDL2] [--jobs N] [--oracle]
 #   Padrão: ROM em local/rom/pokeblack.nds, runner headless (NONE).
 # Tudo que é gerado fica em local/ (ignorado pelo git).
 set -euo pipefail
@@ -10,12 +10,14 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 ROM="$REPO/local/rom/pokeblack.nds"
 SDL=NONE
+ORACLE=0
 JOBS="$( (command -v nproc >/dev/null && nproc) || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
 while [ $# -gt 0 ]; do
   case "$1" in
     --rom) ROM="$2"; shift 2;;
     --sdl) SDL="$2"; shift 2;;
     --jobs) JOBS="$2"; shift 2;;
+    --oracle) ORACLE=1; shift;;
     *) echo "argumento desconhecido: $1" >&2; exit 2;;
   esac
 done
@@ -87,6 +89,20 @@ cmake -G Ninja -S "$NDSR/runner" -B "$RB" -DCMAKE_BUILD_TYPE=Release \
   -DNDS_GENERATED_DIR="$GEN_BASE" -DNDS_RECOMP_UI_ROOT="$REPO/third_party/recomp-ui" \
   -DNDS_TITLE_BANK_DIR="$GEN_TITLE" -DNDS_TITLE_ROM_SHA1="$SHA1" >/dev/null
 cmake --build "$RB" -j "$JOBS" --target nds_runner
+
+if [ "$ORACLE" = 1 ]; then
+  step "extra: oráculo melonDS (FreeBIOS + firmware gerado + boot direto)"
+  MEL="$NDSR/third_party/melonDS"
+  [ -d "$MEL/.git" ] || git clone --depth 1 --branch 1.0rc https://github.com/melonDS-emu/melonDS.git "$MEL"
+  if ! grep -q OracleSysTimestamp "$MEL/src/NDS.h"; then
+    git -C "$MEL" checkout -q .
+    # Ordem que aplica limpo no 1.0rc: o 0003 upstream precisa vir antes do 0001.
+    for n in 0003 0001 0002 0004 0005; do git -C "$MEL" apply "$NDSR"/oracle/patches/$n-*.patch; done
+    for p in "$REPO"/patches/melonds/*.patch; do git -C "$MEL" apply "$p"; done
+  fi
+  cmake -G Ninja -S "$NDSR/oracle/shim" -B "$BUILD/oracle" -DMELONDS_DIR="$MEL" >/dev/null
+  cmake --build "$BUILD/oracle" -j "$JOBS" --target nds_oracle
+fi
 
 echo
 echo "OK: runner em $RB/nds_runner"

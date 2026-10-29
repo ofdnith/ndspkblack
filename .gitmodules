@@ -4,3 +4,6 @@
 [submodule "third_party/pokeblack"]
 	path = third_party/pokeblack
 	url = https://github.com/squiddonaut/pokeblack
+[submodule "third_party/recomp-ui"]
+	path = third_party/recomp-ui
+	url = https://github.com/RetroPortingToolKit/recomp-ui

@@ -52,12 +52,34 @@ Sem pedir: builds, testes, branches, commits e push neste repo, escrever rotas e
 Sempre perguntar: apagar coisas no Mac, mexer fora da pasta do projeto, mudar visibilidade
 do repo, qualquer ação no PS5.
 
-## Comandos (atualizar conforme surgirem)
+## Comandos
 ```sh
-git submodule update --init --recursive        # submódulos fixados
+tools/bootstrap.sh                             # build do zero (ROM → C → runner headless)
+tools/bootstrap.sh --sdl SDL3                  # idem, runner com janela (Mac)
 tools/verify_rom.sh local/rom/pokeblack.nds    # confere SHA-1
-tools/bootstrap.sh                             # build do zero (Fase 1A)
+tools/extract_rom.py                           # header, ARM9/ARM7 (BLZ), 237 overlays, FS → local/extracted
+tools/crosscheck_extract.py                    # confere a extração contra o ndspy
+tools/import_symbols.py                        # rótulos da decomp → local/config/*.toml
+# boot headless (caminho sem dumps da Nintendo):
+local/build/runner-title-none/nds_runner local/run 200000000 \
+  --rom local/rom/pokeblack.nds --no-save --freebios --generated-firmware --boot direct
 ```
+
+## Decisões técnicas registradas
+- **Patch `NDS_FREEBIOS_ONLY`** (`patches/ndsrecomp/0001`): o runner upstream sempre linka
+  os bancos gerados da BIOS da Nintendo. Com esta opção eles saem do build e o binário
+  recusa rodar sem `--freebios --generated-firmware --boot direct`. Exige
+  `NDS_BOOTSTRAP_FIRMWARE=ON`.
+- **recomp-ui** é submódulo (`third_party/recomp-ui`): o runner precisa dele e o padrão
+  upstream aponta para um caminho Windows local.
+- **Overlay 93 (batalha)**: a decomp o dividiu em `asm/battle_*.s`; o importador mapeia esses
+  arquivos para `ov9_093`.
+- **Parâmetros de módulo** do SDK são achados pela assinatura `DEC00621 2106C0DE` dentro do
+  binário (o rodapé de 12 bytes não existe neste dump). Autoload: entradas de 16 bytes.
+- Bancos do título em shards (`--shards 48` ARM9, `--shards 4` ARM7): o runner espera
+  corpos `*_NN.c`, e um único arquivo de 120 MB não é compilável com folga.
+- Alvo de teste upstream `savestate_test` não linka (`nds_performance_execution` indefinido);
+  compilamos só `--target nds_runner`.
 
 ## Commits e tags
 Commits pequenos por tarefa, mensagens em português. Cada fase fecha com tag

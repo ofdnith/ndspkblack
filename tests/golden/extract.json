@@ -1,0 +1,12 @@
+{
+ "rom_sha1": "26ad0b9967aa279c4a266ee69f52b9b2332399a5",
+ "arm9_sha1": "fd4edf3f83b602e79e41ccaaec2270364178a4dd",
+ "arm9_size": 681920,
+ "arm7_sha1": "364259352fffdcd15b75c2d9e997d2ed0d877190",
+ "overlay9_count": 237,
+ "overlay9_compressed": 229,
+ "overlay9_list_sha1": "8c69c56f9a15ceca45d7e5ee0dd8b0675cb441ea",
+ "autoloads_arm9": 4,
+ "autoloads_arm7": 2,
+ "files": 247
+}

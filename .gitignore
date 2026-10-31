@@ -1,0 +1,10 @@
+# Nada derivado do cartucho entra no git.
+rom/*
+!rom/LEIA.txt
+*.nds
+*.sav
+*.pkb
+local/
+third_party/
+__pycache__/
+.DS_Store

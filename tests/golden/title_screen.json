@@ -1,0 +1,17 @@
+{
+ "route": "title_screen",
+ "frames": {
+  "5300": {
+   "A": "5edd36988eaa87f421b5cb98f8c8d37087ad095e",
+   "B": "25419ce1ce77be1256501c2aa9135cb95d5c8bb0"
+  },
+  "5901": {
+   "A": "c86be294325c3eec310b1f9d629030ed879cc8e4",
+   "B": "915268e6639a01ad71aedac57d13cba57bb116f7"
+  },
+  "6000": {
+   "A": "d184cece62428860322ca3006eabe573f5059b9b",
+   "B": "915268e6639a01ad71aedac57d13cba57bb116f7"
+  }
+ }
+}

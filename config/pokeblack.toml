@@ -1,0 +1,13 @@
+# Configuração do runner para Pokémon Black (IRBO). Lida com --config.
+# Só metadados: o SHA-1 do dump e o tipo de save do cartucho.
+[game]
+sha1 = "26ad0b9967aa279c4a266ee69f52b9b2332399a5"
+
+[cartridge]
+# Cartucho com FLASH de 4 Mbit (512 KB), como no banco de dados do melonDS
+# (ROMList: IRBO -> SaveMemType 6 = FLASH 512 KB).
+save_type = "flash"
+save_size = 524288
+
+[display]
+screen_layout = "stacked"

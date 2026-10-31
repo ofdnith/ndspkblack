@@ -1,0 +1,3 @@
+Coloque aqui o dump do SEU cartucho de Pokémon Black (USA/EUR v1.0, IRBO),
+com extensão .nds. SHA-1 esperado: 26ad0b9967aa279c4a266ee69f52b9b2332399a5
+Este arquivo é ignorado pelo git e nunca é publicado.

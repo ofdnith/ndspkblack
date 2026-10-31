@@ -1,0 +1,25 @@
+diff --git a/runner/src/live_overlay_platform.cpp b/runner/src/live_overlay_platform.cpp
+index 45b561e..455fff6 100644
+--- a/runner/src/live_overlay_platform.cpp
++++ b/runner/src/live_overlay_platform.cpp
+@@ -83,8 +83,14 @@ std::string live_overlay_bundled_tcc_command(
+     const auto tcc = toolchain / "tcc" / "tcc";
+     const auto runner = exe_dir / "nds_runner";
+ #else
++    // ndspkblack: no bundled live-overlay toolchain on other hosts (macOS);
++    // keep the Windows/Linux-only body out of the build instead of
++    // referencing undeclared toolchain paths.
++    (void)ec;
++    (void)toolchain;
+     return {};
+ #endif
++#if defined(_WIN32) || defined(__linux__)
+     const auto script = toolchain / "compile_live_shards.py";
+     const auto include = toolchain / "include";
+     ec.clear();
+@@ -104,4 +110,5 @@ std::string live_overlay_bundled_tcc_command(
+         " --runner-exe " + shell_quote(runner) +
+         " --compiler tcc --tcc " + shell_quote(tcc) +
+         " --include-roots --min-hits 8";
++#endif
+ }

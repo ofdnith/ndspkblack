@@ -1,0 +1,70 @@
+{
+ "route": "carregar_m4",
+ "gravado": "Mac: boot com o save de salvar_m4 \u2192 Continue \u2192 quarto; telas iguais ao fim de salvar_m4",
+ "frames": {
+  "6750": {
+   "A": "0551043f326b2608259020eacd3def70f62961ae",
+   "B": "9b2760d8b82af11467483e5acf246954f87e220d"
+  },
+  "6900": {
+   "A": "01a984c58faee22d98f3152f9dab3c1d8fc43a12",
+   "B": "af5eabdf25ed92234f6238f3426281d16cc085ea"
+  },
+  "7050": {
+   "A": "053cbd02ae50472268a6b047826e91f540e7750e",
+   "B": "83fc64521ec9a6ece3f0420454138b03e028e8e5"
+  },
+  "7200": {
+   "A": "7ab35b6be169443f3e51f101cc343457ea2eb391",
+   "B": "36b92051e9ed494dba33047e151dbcdeb9b00e90"
+  },
+  "7350": {
+   "A": "cd838da3bb89232479050e179d5804ccc02f41be",
+   "B": "cd838da3bb89232479050e179d5804ccc02f41be"
+  },
+  "7500": {
+   "A": "e4c5fa57e0e2d1676a9689610f25495ff71b1b34",
+   "B": "cd838da3bb89232479050e179d5804ccc02f41be"
+  },
+  "7650": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "7800": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "7950": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "8100": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "8250": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "8400": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "8550": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "8700": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "8850": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "9000": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  }
+ }
+}

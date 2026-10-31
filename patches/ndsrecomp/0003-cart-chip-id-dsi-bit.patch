@@ -1,0 +1,17 @@
+diff --git a/runner/src/io.cpp b/runner/src/io.cpp
+index 20544a0..a124474 100644
+--- a/runner/src/io.cpp
++++ b/runner/src/io.cpp
+@@ -1967,6 +1967,12 @@ bool nds_io_load_cartridge(const uint8_t* rom, uint32_t rom_size,
+ 
+     const uint32_t megabytes = std::max(1u, rom_size >> 20u);
+     g_card_chip_id = 0x000000C2u | ((megabytes - 1u) << 8u);
++    // ndspkblack: DSi-enhanced/exclusive cartridges (unit code bit 1, nonzero
++    // DSi region mask) report bit 30 in the chip ID, matching melonDS
++    // NDSCart.cpp ParseROM ("if (dsi) cartid |= 0x40000000").
++    if (rom_size >= 0x1B4u && (rom[0x12u] & 0x02u) != 0u &&
++        load_le32(rom + 0x1B0u) != 0u)
++        g_card_chip_id |= 0x40000000u;
+ 
+     // Blank backup memory is 0xFF. Interactive play loads an exact-size
+     // battery file; parity/automation runs explicitly keep persistence off.

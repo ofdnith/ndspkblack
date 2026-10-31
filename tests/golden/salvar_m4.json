@@ -1,0 +1,74 @@
+{
+ "route": "salvar_m4",
+ "gravado": "Mac: salva no menu (31700\u201332800); fim no quarto",
+ "frames": {
+  "31600": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "31740": {
+   "A": "280e5bf2658ad31eea644f529438bb61c41504a7",
+   "B": "f748e579c60a5e370e30b697d2db16b32ef38df1"
+  },
+  "31840": {
+   "A": "280e5bf2658ad31eea644f529438bb61c41504a7",
+   "B": "0bd3f0f594b08814fe38200e0b29357c296938c6"
+  },
+  "31900": {
+   "A": "280e5bf2658ad31eea644f529438bb61c41504a7",
+   "B": "4dc14744d6dfc0d445aaf907eaca5bd8e5080d9c"
+  },
+  "31960": {
+   "A": "280e5bf2658ad31eea644f529438bb61c41504a7",
+   "B": "e82c8f8c9efbb28f057c30632cbe429db3943b3c"
+  },
+  "32040": {
+   "A": "280e5bf2658ad31eea644f529438bb61c41504a7",
+   "B": "1e99ebb6aa57073236ea74deca97d6c1a9096df1"
+  },
+  "32190": {
+   "A": "280e5bf2658ad31eea644f529438bb61c41504a7",
+   "B": "e86c1cb669ac83658c5006e02a5accb807d224d7"
+  },
+  "32340": {
+   "A": "c46f95823ae76587eb4a3e70303181635b53cc64",
+   "B": "108d8314ac7880957c9fc62fc95a49524dec263d"
+  },
+  "32490": {
+   "A": "8d32fb612c1bb217a46e9353f2a0fac87906a173",
+   "B": "7c035d0ffbc011b7d27ce85ff60a675e976569ec"
+  },
+  "32640": {
+   "A": "0aaccf9ddd8fce5e68291ad0d8ad5f1d79c0738a",
+   "B": "ca4b899638dc2286f99c62a013a311e55dd7627e"
+  },
+  "32790": {
+   "A": "280e5bf2658ad31eea644f529438bb61c41504a7",
+   "B": "44319bb64496dfb19fc59f5ea931e4b8db0344d0"
+  },
+  "32940": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "33090": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "33240": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "33390": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "33600": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "33800": {
+   "A": "356585ce05d72b5ffa477062f877b789bb64dd21",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  }
+ }
+}

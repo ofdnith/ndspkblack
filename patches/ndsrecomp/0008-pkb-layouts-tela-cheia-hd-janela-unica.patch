@@ -1,0 +1,416 @@
+diff -ruN a/runner/src/frontend.cpp b/runner/src/frontend.cpp
+--- a/runner/src/frontend.cpp	2026-10-31 12:35:44.952018279 +0000
++++ b/runner/src/frontend.cpp	2026-10-31 12:35:44.956018279 +0000
+@@ -946,6 +946,18 @@
+     SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+     SDL_CONTROLLER_BUTTON_X, SDL_CONTROLLER_BUTTON_Y};
+ int g_pkb_quality = 0;  // 0 original, 1 baixo, 2 medio, 3 alto (aplicado pelo lançador ao abrir)
++// pokeblack-recomp (patch 0008): layout da janela única e tela cheia (aplicados na hora).
++int g_pkb_layout = 0;          // 0 empilhado, 1 lado a lado, 2 tela principal grande
++int g_pkb_fullscreen = 0;      // 0 não, 1 sim
++bool g_pkb_layout_dirty = false;
++struct PkbRect { int x, y, w, h; };
++void pkb_geometry(int layout, int* lw, int* lh, PkbRect* top, PkbRect* bottom) {
++    switch (layout) {
++        case 1: *lw = 512; *lh = 192; *top = {0, 0, 256, 192}; *bottom = {256, 0, 256, 192}; break;
++        case 2: *lw = 1024; *lh = 576; *top = {0, 0, 768, 576}; *bottom = {768, 384, 256, 192}; break;
++        default: *lw = 256; *lh = 384; *top = {0, 0, 256, 192}; *bottom = {0, 192, 256, 192}; break;
++    }
++}
+ 
+ uint16_t controller_bit(SDL_GameControllerButton button) {
+     uint16_t bits = 0;
+@@ -1004,10 +1016,16 @@
+ void set_touch_from_mouse(float x, float y, bool down,
+                           NdsScreenLayout layout, int logical_width) {
+     // Coordinates are expected in the renderer's logical DS-space.
+-    const float bottom_origin =
++    float bottom_origin =
+         layout == NdsScreenLayout::Separate ? 0.0f : kScreenHeight;
+-    const float left =
++    float left =
+         static_cast<float>((logical_width - kScreenWidth) / 2);
++    if (layout != NdsScreenLayout::Separate) {  // pokeblack-recomp: tela de baixo no retângulo do layout
++        int lw, lh; PkbRect t, b;
++        pkb_geometry(g_pkb_layout, &lw, &lh, &t, &b);
++        bottom_origin = static_cast<float>(b.y);
++        left = static_cast<float>(b.x);
++    }
+     if (!down || x < left || x >= left + kScreenWidth ||
+         y < bottom_origin || y >= bottom_origin + kScreenHeight) {
+         nds_set_touch(0, 0, false);
+@@ -1230,6 +1248,8 @@
+         const std::string k = line.substr(0, eq);
+         const int v = std::atoi(line.c_str() + eq + 1);
+         if (k == "pkb_quality" && v >= 0 && v <= 3) g_pkb_quality = v;
++        if (k == "pkb_layout" && v >= 0 && v <= 2) g_pkb_layout = v;
++        if (k == "pkb_fullscreen" && v >= 0 && v <= 1) g_pkb_fullscreen = v;
+         if (k.rfind("pkb_pad_", 0) == 0) {
+             const int i = std::atoi(k.c_str() + 8);
+             if (i >= 0 && i < 12 && v >= -1 && v < 32) g_pkb_pad[i] = v;
+@@ -1248,6 +1268,8 @@
+             if (line.rfind("pkb_", 0) != 0) lines.push_back(line);
+     }
+     lines.push_back("pkb_quality=" + std::to_string(g_pkb_quality));
++    lines.push_back("pkb_layout=" + std::to_string(g_pkb_layout));
++    lines.push_back("pkb_fullscreen=" + std::to_string(g_pkb_fullscreen));
+     for (int i = 0; i < 12; ++i)
+         lines.push_back("pkb_pad_" + std::to_string(i) + "=" + std::to_string(g_pkb_pad[i]));
+     std::ofstream out(path, std::ios::trunc);
+@@ -1306,6 +1328,8 @@
+     auto* state = static_cast<RuntimeMenuState*>(context);
+     if (!state || !state->options || !item || !value_out) return 0;
+     if (std::strcmp(item->key, kPkbQualityKey) == 0) { *value_out = g_pkb_quality; return 1; }
++    if (std::strcmp(item->key, "pkb.layout") == 0) { *value_out = g_pkb_layout; return 1; }
++    if (std::strcmp(item->key, "pkb.fullscreen") == 0) { *value_out = g_pkb_fullscreen; return 1; }
+     if (std::strncmp(item->key, kPkbPadPrefix, 8) == 0 && item->key[8] >= '0' && item->key[8] <= '9') {
+         *value_out = g_pkb_pad[std::atoi(item->key + 8)]; return 1;
+     }
+@@ -1320,6 +1344,14 @@
+                            int value) {
+     auto* state = static_cast<RuntimeMenuState*>(context);
+     if (!state || !state->options || !item) return 0;
++    if (std::strcmp(item->key, "pkb.layout") == 0 || std::strcmp(item->key, "pkb.fullscreen") == 0) {
++        const bool lay = item->key[4] == 'l';
++        if (value < 0 || value > (lay ? 2 : 1)) return 0;
++        (lay ? g_pkb_layout : g_pkb_fullscreen) = value;
++        g_pkb_layout_dirty = true;
++        pkb_save_settings(state->options->runtime_settings_path);
++        return 1;
++    }
+     if (std::strcmp(item->key, kPkbQualityKey) == 0) {
+         if (value < 0 || value > 3) return 0;
+         g_pkb_quality = value;
+@@ -1626,7 +1658,7 @@
+ bool set_render_logical_size(SDL_Renderer* renderer, int width, int height) {
+ #if defined(NDS_HAVE_SDL3)
+     return SDL_SetRenderLogicalPresentation(
+-        renderer, width, height, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
++        renderer, width, height, SDL_LOGICAL_PRESENTATION_LETTERBOX);  // pokeblack-recomp: ocupa a tela
+ #else
+     return SDL_RenderSetLogicalSize(renderer, width, height) == 0;
+ #endif
+@@ -1665,6 +1697,22 @@
+         }
+         return nullptr;
+     };
++    if (presentation.gl_top && !presentation.separate) {
++        auto map = [&](float* x, float* y) {
++            int ww = 0, wh = 0, lw, lh; PkbRect t, b;
++            SDL_GetWindowSize(presentation.windows[0], &ww, &wh);
++            pkb_geometry(g_pkb_layout, &lw, &lh, &t, &b);
++            if (ww <= 0 || wh <= 0) return;
++            const float sc = std::min(static_cast<float>(ww) / lw, static_cast<float>(wh) / lh);
++            *x = (*x - (ww - lw * sc) / 2.0f) / sc;
++            *y = (*y - (wh - lh * sc) / 2.0f) / sc;
++        };
++        if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP)
++            map(&event.button.x, &event.button.y);
++        else if (event.type == SDL_MOUSEMOTION)
++            map(&event.motion.x, &event.motion.y);
++        return;
++    }
+     if (event.type == SDL_MOUSEBUTTONDOWN ||
+         event.type == SDL_MOUSEBUTTONUP) {
+         if (SDL_Renderer* renderer =
+@@ -1833,6 +1881,7 @@
+ bool create_presentation(const NdsFrontendOptions& options,
+                          FrontendPresentation& presentation,
+                          bool allow_gl_top = true) {
++    pkb_load_settings(options.runtime_settings_path);  // pokeblack-recomp: layout/tela cheia
+     presentation.separate =
+         options.screen_layout == NdsScreenLayout::Separate;
+ #if defined(NDS_HAVE_COMPUTE_RENDERER)
+@@ -1844,8 +1893,7 @@
+     const bool direct_top_requested =
+         (options.adaptive_screens & NDS_ADAPTIVE_TOP) != 0u ||
+         options.internal_resolution > 1u;
+-    presentation.gl_top = presentation.separate &&
+-        allow_gl_top &&
++    presentation.gl_top = allow_gl_top &&  // pokeblack-recomp: também na janela única
+         direct_top_requested &&
+         nds_gpu3d_renderer_prefers_compute() &&
+         direct_enabled;
+@@ -1879,9 +1927,12 @@
+         presentation.separate ? "ndsrecomp - Top Screen"
+                                : "Pokemon Black",
+         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+-        (presentation.separate ? presentation.screen_widths[0]
+-                               : presentation.canvas_width) * kWindowScale,
+-        first_height,
++        presentation.separate ? presentation.screen_widths[0] * kWindowScale : [&] {
++            int lw, lh; PkbRect t, b; pkb_geometry(g_pkb_layout, &lw, &lh, &t, &b);
++            return g_pkb_layout == 2 ? lw : lw * kWindowScale; }(),
++        presentation.separate ? first_height : [&] {
++            int lw, lh; PkbRect t, b; pkb_geometry(g_pkb_layout, &lw, &lh, &t, &b);
++            return g_pkb_layout == 2 ? lh : lh * kWindowScale; }(),
+         top_window_flags);
+     if (!presentation.windows[0]) {
+         std::fprintf(stderr, "[sdl] window failed: %s\n", SDL_GetError());
+@@ -1929,7 +1980,8 @@
+     // Fullscreen is applied only after both separate-layout windows have their
+     // final placement. The primary combined/top window is deliberately the
+     // sole target so the separate touch window remains usable.
+-    if (!set_window_fullscreen(presentation.windows[0], options.fullscreen)) {
++    if (!set_window_fullscreen(presentation.windows[0],
++            g_pkb_fullscreen ? NdsFullscreenMode::Borderless : options.fullscreen)) {
+         std::fprintf(stderr, "[sdl] fullscreen (%s) failed: %s\n",
+                      nds_fullscreen_mode_name(options.fullscreen),
+                      SDL_GetError());
+@@ -1938,7 +1990,7 @@
+     }
+ 
+     for (int screen = 0; screen < 2; ++screen) {
+-        if (screen == 0 && presentation.gl_top) {
++        if (presentation.gl_top && (screen == 0 || !presentation.separate)) {
+             presentation.window_ids[screen] =
+                 SDL_GetWindowID(presentation.windows[screen]);
+             continue;
+@@ -1946,12 +1998,14 @@
+         const int logical_height =
+             !presentation.separate && screen == 0
+                 ? kScreenHeight * 2 : kScreenHeight;
+-        if (screen == 0 || presentation.separate) {
++        if (screen == 0 && !presentation.separate) {
++            int lw, lh; PkbRect t, b; pkb_geometry(g_pkb_layout, &lw, &lh, &t, &b);
++            set_render_logical_size(presentation.renderers[screen], lw, lh);
++            (void)logical_height;
++        } else if (presentation.separate) {
+             set_render_logical_size(
+                 presentation.renderers[screen],
+-                presentation.separate
+-                    ? presentation.screen_widths[screen]
+-                    : presentation.canvas_width,
++                presentation.screen_widths[screen],
+                 logical_height);
+ #if !defined(NDS_HAVE_SDL3)
+             SDL_RenderSetIntegerScale(presentation.renderers[screen],
+@@ -2076,8 +2130,24 @@
+                                   float virtual_stylus_y,
+                                   const char* savestate_notice) {
+     PresentationTicks ticks{};
++    if (g_pkb_layout_dirty) {  // pokeblack-recomp: layout/tela cheia mudaram no menu
++        g_pkb_layout_dirty = false;
++        int lw, lh; PkbRect t, b; pkb_geometry(g_pkb_layout, &lw, &lh, &t, &b);
++        if (!presentation.separate && presentation.renderers[0])
++            set_render_logical_size(presentation.renderers[0], lw, lh);
++        set_window_fullscreen(presentation.windows[0],
++            g_pkb_fullscreen ? NdsFullscreenMode::Borderless : NdsFullscreenMode::Off);
++        if (!g_pkb_fullscreen && !presentation.separate)
++            SDL_SetWindowSize(presentation.windows[0],
++                              g_pkb_layout == 2 ? lw : lw * kWindowScale,
++                              g_pkb_layout == 2 ? lh : lh * kWindowScale);
++    }
+     if (presentation.gl_top) {
+ #if defined(NDS_HAVE_COMPUTE_RENDERER)
++        if (!presentation.separate) {  // pokeblack-recomp: as duas telas na mesma janela GL
++            bottom_pixels = runtime_menu_overlay(runtime_ui, bottom_pixels, bottom_width, kScreenHeight);
++            nds_compute_host_set_bottom(bottom_pixels, bottom_width, g_pkb_layout);
++        }
+         NdsGpu2dDirectFrame direct_frame{};
+         const bool latency = nds_frontend_latency::enabled.load(std::memory_order_relaxed);
+         const auto pool_begin = latency ? SDL_GetPerformanceCounter() : 0;
+@@ -2098,6 +2168,7 @@
+         ticks.swap += gl_ticks.swap;
+         ticks.gl_setup = gl_ticks.setup;
+         ticks.gl_error = gl_ticks.error;
++        if (!presentation.separate) return ticks;  // pokeblack-recomp: tela de baixo já desenhada pelo GL
+         const auto overlay_begin = latency ? SDL_GetPerformanceCounter() : 0;
+         bottom_pixels = runtime_menu_overlay(
+             runtime_ui, bottom_pixels, bottom_width, kScreenHeight);
+@@ -2137,14 +2208,10 @@
+         start = SDL_GetPerformanceCounter();
+         SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
+         SDL_RenderClear(renderer);
+-        const SDL_Rect top_rect{
+-            (presentation.canvas_width -
+-             presentation.screen_widths[0]) / 2,
+-            0, presentation.screen_widths[0], kScreenHeight};
+-        const SDL_Rect bottom_rect{
+-            (presentation.canvas_width -
+-             presentation.screen_widths[1]) / 2,
+-            kScreenHeight, presentation.screen_widths[1], kScreenHeight};
++        int pkb_lw, pkb_lh; PkbRect pkb_t, pkb_b;  // pokeblack-recomp: retângulos do layout
++        pkb_geometry(g_pkb_layout, &pkb_lw, &pkb_lh, &pkb_t, &pkb_b);
++        const SDL_Rect top_rect{pkb_t.x, pkb_t.y, pkb_t.w, pkb_t.h};
++        const SDL_Rect bottom_rect{pkb_b.x, pkb_b.y, pkb_b.w, pkb_b.h};
+         render_screen(presentation, 0, top_rect);
+         render_screen(presentation, 1, bottom_rect);
+         if (virtual_stylus_visible)
+@@ -2506,6 +2573,8 @@
+     RuntimeMenuState runtime_menu_state{&options, &running, false};
+     pkb_load_settings(options.runtime_settings_path);
+     static const char* const kPkbQualityNames[] = {"ORIGINAL", "BAIXO", "MEDIO", "ALTO"};
++    static const char* const kPkbLayoutNames[] = {"EMPILHADO", "LADO A LADO", "TELA PRINCIPAL GRANDE"};
++    static const char* const kPkbNaoSim[] = {"NAO", "SIM"};
+     static const char* const kPkbPadNames[] = {
+         "NENHUM", "SUL (A XBOX / X PS)", "LESTE (B XBOX / O PS)", "OESTE (X XBOX / QUADRADO)",
+         "NORTE (Y XBOX / TRIANGULO)", "SELECT / VIEW / SHARE", "START / MENU / OPTIONS",
+@@ -2526,6 +2595,12 @@
+          "Original = DS puro. Baixo 2x, Medio 3x + suavizacao, Alto 4x + suavizacao maxima. "
+          "Vale ao reiniciar.",
+          RECOMP_RUNTIME_UI_CHOICE, 0, 3, 1, kPkbQualityNames, 4, nullptr},
++        {"pkb.layout", "Tela", "Layout",
++         "Empilhado (como o DS), lado a lado, ou tela principal grande com a de baixo pequena.",
++         RECOMP_RUNTIME_UI_CHOICE, 0, 2, 1, kPkbLayoutNames, 3, nullptr},
++        {"pkb.fullscreen", "Tela", "Tela cheia",
++         "Ocupa a tela inteira do Mac.",
++         RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kPkbNaoSim, 2, nullptr},
+         {kPkbRestartKey, "Graficos", "Reiniciar para aplicar",
+          "Salva e reabre o jogo com a nova qualidade (salve no jogo antes!).",
+          RECOMP_RUNTIME_UI_ACTION, 0, 0, 0, nullptr, 0, nullptr},
+diff -ruN a/runner/src/melonds_compute/ComputeHost.cpp b/runner/src/melonds_compute/ComputeHost.cpp
+--- a/runner/src/melonds_compute/ComputeHost.cpp	2026-10-31 12:35:44.951018279 +0000
++++ b/runner/src/melonds_compute/ComputeHost.cpp	2026-10-31 13:31:26.878000958 +0000
+@@ -1,4 +1,5 @@
+ // GPL-3.0-or-later; see ComputeHost.h and THIRD_PARTY_ATTRIBUTION.md.
++#include <algorithm>
+ #include "ComputeHost.h"
+ 
+ #include <cstdio>
+@@ -199,6 +200,85 @@
+     if (!glad_glTexStorage3D) glad_glTexStorage3D = pkb_tex_storage_3d;
+ }
+ 
++// ── pokeblack-recomp (patch 0008): tela de baixo + layouts numa janela só ──
++static const unsigned int* g_pkb_bottom_pixels = nullptr;
++static int g_pkb_bottom_width = 0;
++static int g_pkb_layout = -1;  // -1 = só a tela de cima (modo antigo, janelas separadas)
++static GLuint g_pkb_bottom_program = 0;
++static GLuint g_pkb_bottom_texture = 0;
++static const char* kPkbBottomVertex = R"GLSL(#version 410 core
++out vec2 uv;
++void main() {
++    vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
++    uv = vec2((p.x + 1.0) * 0.5, 1.0 - (p.y + 1.0) * 0.5);
++    gl_Position = vec4(p, 0.0, 1.0);
++}
++)GLSL";
++static const char* kPkbBottomFragment = R"GLSL(#version 410 core
++uniform sampler2D tex;
++in vec2 uv;
++out vec4 color;
++void main() { color = vec4(texture(tex, uv).rgb, 1.0); }
++)GLSL";
++struct PkbRect { int x, y, w, h; };
++static void pkb_geometry(int layout, int* lw, int* lh, PkbRect* top, PkbRect* bottom) {
++    switch (layout) {
++        case 1: *lw = 512; *lh = 192; *top = {0, 0, 256, 192}; *bottom = {256, 0, 256, 192}; break;
++        case 2: *lw = 1024; *lh = 576; *top = {0, 0, 768, 576}; *bottom = {768, 384, 256, 192}; break;
++        default: *lw = 256; *lh = 384; *top = {0, 0, 256, 192}; *bottom = {0, 192, 256, 192}; break;
++    }
++}
++// Retângulo lógico -> viewport GL (origem embaixo à esquerda), conteúdo centralizado com tarjas.
++static void pkb_viewport(int dw, int dh, int lw, int lh, const PkbRect& r) {
++    const double s = std::min(static_cast<double>(dw) / lw, static_cast<double>(dh) / lh);
++    const double ox = (dw - lw * s) / 2.0, oy = (dh - lh * s) / 2.0;
++    const int x0 = static_cast<int>(ox + r.x * s + 0.5), x1 = static_cast<int>(ox + (r.x + r.w) * s + 0.5);
++    const int y0 = static_cast<int>(oy + (lh - r.y - r.h) * s + 0.5), y1 = static_cast<int>(oy + (lh - r.y) * s + 0.5);
++    glViewport(x0, y0, x1 - x0, y1 - y0);
++}
++void pkb_set_bottom_impl(const unsigned int* pixels, int width, int layout) {
++    g_pkb_bottom_pixels = pixels;
++    g_pkb_bottom_width = width;
++    g_pkb_layout = layout;
++}
++static bool pkb_draw_bottom(int dw, int dh) {
++    if (!g_pkb_bottom_program) {
++        GLuint v = compile_shader(GL_VERTEX_SHADER, kPkbBottomVertex);
++        GLuint f = compile_shader(GL_FRAGMENT_SHADER, kPkbBottomFragment);
++        if (!v || !f) return false;
++        g_pkb_bottom_program = glCreateProgram();
++        glAttachShader(g_pkb_bottom_program, v);
++        glAttachShader(g_pkb_bottom_program, f);
++        glLinkProgram(g_pkb_bottom_program);
++        glDeleteShader(v);
++        glDeleteShader(f);
++        GLint ok = GL_FALSE;
++        glGetProgramiv(g_pkb_bottom_program, GL_LINK_STATUS, &ok);
++        if (ok != GL_TRUE) return false;
++        glUseProgram(g_pkb_bottom_program);
++        glUniform1i(glGetUniformLocation(g_pkb_bottom_program, "tex"), 7);
++        glGenTextures(1, &g_pkb_bottom_texture);
++        glActiveTexture(GL_TEXTURE7);
++        glBindTexture(GL_TEXTURE_2D, g_pkb_bottom_texture);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 256, 192, 0, GL_BGRA, GL_UNSIGNED_BYTE, nullptr);
++    }
++    if (!g_pkb_bottom_pixels || g_pkb_bottom_width != 256) return true;  // larguras adaptativas: não usadas aqui
++    int lw, lh; PkbRect top, bottom;
++    pkb_geometry(g_pkb_layout, &lw, &lh, &top, &bottom);
++    glUseProgram(g_pkb_bottom_program);
++    glActiveTexture(GL_TEXTURE7);
++    glBindTexture(GL_TEXTURE_2D, g_pkb_bottom_texture);
++    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 256, 192, GL_BGRA, GL_UNSIGNED_BYTE, g_pkb_bottom_pixels);
++    pkb_viewport(dw, dh, lw, lh, bottom);
++    glBindVertexArray(g_present_vao);
++    glDrawArrays(GL_TRIANGLES, 0, 3);
++    return true;
++}
++
+ bool start_presenter()
+ {
+     GLuint vertex = compile_shader(GL_VERTEX_SHADER, kPresentVertex);
+@@ -296,7 +376,11 @@
+     if (g_context && g_window) {
+         sdl_make_current(g_window, g_context);
+         stop_presenter();
++        if (g_pkb_bottom_program) glDeleteProgram(g_pkb_bottom_program);
++        if (g_pkb_bottom_texture) glDeleteTextures(1, &g_pkb_bottom_texture);
+     }
++    g_pkb_bottom_program = 0;
++    g_pkb_bottom_texture = 0;
+     if (g_context) nds_texture_upscale_shutdown();
+     if (g_context) sdl_destroy_context(g_context);
+     if (g_window && g_owns_window) SDL_DestroyWindow(g_window);
+@@ -545,7 +629,13 @@
+         fit_present_viewport(drawable_width, drawable_height, width, 192);
+     glClearColor(0.f, 0.f, 0.f, 1.f);
+     glClear(GL_COLOR_BUFFER_BIT);
+-    glViewport(viewport.x, viewport.y, viewport.width, viewport.height);
++    if (g_pkb_layout >= 0) {
++        int lw, lh; PkbRect top, bottom;
++        pkb_geometry(g_pkb_layout, &lw, &lh, &top, &bottom);
++        pkb_viewport(drawable_width, drawable_height, lw, lh, top);
++    } else {
++        glViewport(viewport.x, viewport.y, viewport.width, viewport.height);
++    }
+     glUseProgram(g_present_program);
+     glActiveTexture(GL_TEXTURE1);
+     glBindTexture(GL_TEXTURE_2D, g_object_texture[buffer]);
+@@ -600,6 +690,8 @@
+     }
+     glBindVertexArray(g_present_vao);
+     glDrawArrays(GL_TRIANGLES, 0, 3);
++    if (g_pkb_layout >= 0 && !pkb_draw_bottom(drawable_width, drawable_height))
++        std::fprintf(stderr, "[pkb] tela de baixo (GL) falhou\n");
+     ticks->draw += SDL_GetPerformanceCounter() - start;
+ 
+     // Keep the qualified per-frame GL checks. A window-system swap failure
+@@ -656,3 +748,9 @@
+ {
+     return g_gl_version;
+ }
++
++// pokeblack-recomp (patch 0008): ponto de entrada público (fora do namespace anônimo).
++void nds_compute_host_set_bottom(const unsigned int* pixels, int width, int layout)
++{
++    pkb_set_bottom_impl(pixels, width, layout);
++}
+diff -ruN a/runner/src/melonds_compute/ComputeHost.h b/runner/src/melonds_compute/ComputeHost.h
+--- a/runner/src/melonds_compute/ComputeHost.h	2026-10-31 12:35:44.951018279 +0000
++++ b/runner/src/melonds_compute/ComputeHost.h	2026-10-31 12:35:44.955018279 +0000
+@@ -29,6 +29,10 @@
+                                   const NdsGpu2dDirectFrame* direct_frame,
+                                   NdsComputePresentTicks* ticks,
+                                   unsigned antialiasing = 0);
++// pokeblack-recomp (patch 0008): janela única com as duas telas. Chamar antes de present_top:
++// a tela de cima vai para o retângulo do layout e a de baixo é desenhada no dela.
++// layout: 0 empilhado, 1 lado a lado, 2 tela principal grande.
++void nds_compute_host_set_bottom(const unsigned int* pixels, int width, int layout);
+ void nds_compute_host_stop();
+ bool nds_compute_host_active();
+ 

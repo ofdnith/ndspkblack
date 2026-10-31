@@ -1,0 +1,8 @@
+{
+ "descricao": "Boot sem input: tela branca, logos The Pokémon Company/Nintendo, fade e começo da animação 3D da Game Freak. Pontos escolhidos onde o nativo bate com o melonDS (reset antes de cada ponto).",
+ "checkpoints": [
+  {"vblank9": 1}, {"vblank9": 30}, {"vblank9": 60}, {"vblank9": 120}, {"vblank9": 180},
+  {"vblank9": 240}, {"vblank9": 300}, {"vblank9": 360}, {"vblank9": 450}, {"vblank9": 600},
+  {"vblank9": 602}, {"vblank9": 606}, {"vblank9": 610}
+ ]
+}

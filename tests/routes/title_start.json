@@ -1,0 +1,7 @@
+{
+ "descricao": "Tela título -> menu com Start. Start apertado no VBlank 6700 (o PRESS START aparece ~6600 no nativo) por 10 quadros, depois solto. Repete o experimento de 29/10, que usou a tabela de 10 bits e por isso apertou Start + X + Y. Golden ainda não gravado: precisa rodar com a ROM e conferir visualmente que 7000 é o menu.",
+ "inputs": [[6700, ["start"]], [6710, []]],
+ "checkpoints": [
+  {"vblank9": 6699}, {"vblank9": 6720}, {"vblank9": 6800}, {"vblank9": 7000}
+ ]
+}

@@ -1,0 +1,7 @@
+{
+ "descricao": "Boot sem input até a tela título (logo Pokémon Black embaixo, Reshiram 3D em cima). O nativo está ~99 quadros adiantado em relação ao melonDS 1.0rc: nativo 5901 == oráculo 6000 (as duas telas, pixel a pixel). Ver CLAUDE.md, comparação por conteúdo alinhado.",
+ "oraculo_alinhado": {"5901": 6000},
+ "checkpoints": [
+  {"vblank9": 5300}, {"vblank9": 5901}, {"vblank9": 6000}
+ ]
+}

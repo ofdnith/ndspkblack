@@ -1,0 +1,485 @@
+diff -ruN a/runner/src/frontend.cpp b/runner/src/frontend.cpp
+--- a/runner/src/frontend.cpp	2026-10-31 11:42:47.309016764 +0000
++++ b/runner/src/frontend.cpp	2026-10-31 11:42:47.312016764 +0000
+@@ -272,6 +272,8 @@
+ #define SDL_CONTROLLER_BUTTON_INVALID SDL_GAMEPAD_BUTTON_INVALID
+ #define SDL_CONTROLLER_BUTTON_LEFTSHOULDER SDL_GAMEPAD_BUTTON_LEFT_SHOULDER
+ #define SDL_CONTROLLER_BUTTON_LEFTSTICK SDL_GAMEPAD_BUTTON_LEFT_STICK
++#undef SDL_CONTROLLER_BUTTON_GUIDE
++#define SDL_CONTROLLER_BUTTON_GUIDE SDL_GAMEPAD_BUTTON_GUIDE
+ #define SDL_CONTROLLER_BUTTON_RIGHTSHOULDER SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER
+ #define SDL_CONTROLLER_BUTTON_RIGHTSTICK SDL_GAMEPAD_BUTTON_RIGHT_STICK
+ #define SDL_CONTROLLER_BUTTON_START SDL_GAMEPAD_BUTTON_START
+@@ -929,7 +931,30 @@
+     }
+ }
+ 
++// pokeblack-recomp (patch 0007): mapeamento do controle configurável no menu (Esc / Guide / L3).
++// g_pkb_pad[i] = botão SDL que aperta o botão i do DS (bits: A B SELECT START DIR ESQ CIMA BAIXO R L X Y).
++int g_pkb_pad[12] = {
++    SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_B, SDL_CONTROLLER_BUTTON_BACK,
++    SDL_CONTROLLER_BUTTON_START, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, SDL_CONTROLLER_BUTTON_DPAD_LEFT,
++    SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN,
++    SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
++    SDL_CONTROLLER_BUTTON_X, SDL_CONTROLLER_BUTTON_Y};
++const int kPkbPadDefault[12] = {
++    SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_B, SDL_CONTROLLER_BUTTON_BACK,
++    SDL_CONTROLLER_BUTTON_START, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, SDL_CONTROLLER_BUTTON_DPAD_LEFT,
++    SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN,
++    SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
++    SDL_CONTROLLER_BUTTON_X, SDL_CONTROLLER_BUTTON_Y};
++int g_pkb_quality = 0;  // 0 original, 1 baixo, 2 medio, 3 alto (aplicado pelo lançador ao abrir)
++
+ uint16_t controller_bit(SDL_GameControllerButton button) {
++    uint16_t bits = 0;
++    for (int i = 0; i < 12; ++i)
++        if (g_pkb_pad[i] == static_cast<int>(button)) bits |= static_cast<uint16_t>(1u << i);
++    return bits;
++}
++
++[[maybe_unused]] uint16_t controller_bit_original(SDL_GameControllerButton button) {
+     switch (button) {
+         case SDL_CONTROLLER_BUTTON_A:             return 1u << 0;
+         case SDL_CONTROLLER_BUTTON_B:             return 1u << 1;
+@@ -1189,6 +1214,53 @@
+     bool close_requested = false;
+ };
+ 
++// ── pokeblack-recomp (patch 0007): qualidade gráfica + controle no arquivo de configurações ──
++constexpr const char* kPkbQualityKey = "pkb.quality";
++constexpr const char* kPkbRestartKey = "pkb.restart";
++constexpr const char* kPkbPadResetKey = "pkb.pad.reset";
++constexpr const char* kPkbPadPrefix = "pkb.pad.";
++
++void pkb_load_settings(const std::string& path) {
++    if (path.empty()) return;
++    std::ifstream in(path);
++    std::string line;
++    while (std::getline(in, line)) {
++        const size_t eq = line.find('=');
++        if (eq == std::string::npos) continue;
++        const std::string k = line.substr(0, eq);
++        const int v = std::atoi(line.c_str() + eq + 1);
++        if (k == "pkb_quality" && v >= 0 && v <= 3) g_pkb_quality = v;
++        if (k.rfind("pkb_pad_", 0) == 0) {
++            const int i = std::atoi(k.c_str() + 8);
++            if (i >= 0 && i < 12 && v >= -1 && v < 32) g_pkb_pad[i] = v;
++        }
++    }
++    std::fprintf(stderr, "[pkb] configuracoes: qualidade=%d\n", g_pkb_quality);
++}
++
++bool pkb_save_settings(const std::string& path) {
++    if (path.empty()) return false;
++    std::vector<std::string> lines;
++    {
++        std::ifstream in(path);
++        std::string line;
++        while (std::getline(in, line))
++            if (line.rfind("pkb_", 0) != 0) lines.push_back(line);
++    }
++    lines.push_back("pkb_quality=" + std::to_string(g_pkb_quality));
++    for (int i = 0; i < 12; ++i)
++        lines.push_back("pkb_pad_" + std::to_string(i) + "=" + std::to_string(g_pkb_pad[i]));
++    std::ofstream out(path, std::ios::trunc);
++    for (const std::string& l : lines) out << l << '\n';
++    return static_cast<bool>(out);
++}
++
++// Pede ao lançador para reabrir o jogo (arquivo "reiniciar" ao lado das configurações).
++void pkb_request_restart(const std::string& settings_path) {
++    std::filesystem::path p(settings_path);
++    std::ofstream(p.parent_path() / "reiniciar") << "1\n";
++}
++
+ bool save_runtime_mouse_sensitivity(const std::string& path, uint16_t value) {
+     if (path.empty()) return false;
+     std::filesystem::path settings(path);
+@@ -1233,6 +1305,10 @@
+                            int* value_out) {
+     auto* state = static_cast<RuntimeMenuState*>(context);
+     if (!state || !state->options || !item || !value_out) return 0;
++    if (std::strcmp(item->key, kPkbQualityKey) == 0) { *value_out = g_pkb_quality; return 1; }
++    if (std::strncmp(item->key, kPkbPadPrefix, 8) == 0 && item->key[8] >= '0' && item->key[8] <= '9') {
++        *value_out = g_pkb_pad[std::atoi(item->key + 8)]; return 1;
++    }
+     if (std::strcmp(item->key, kRuntimeMouseSensitivityKey) == 0) {
+         *value_out = state->options->relative_mouse_sensitivity;
+         return 1;
+@@ -1244,6 +1320,17 @@
+                            int value) {
+     auto* state = static_cast<RuntimeMenuState*>(context);
+     if (!state || !state->options || !item) return 0;
++    if (std::strcmp(item->key, kPkbQualityKey) == 0) {
++        if (value < 0 || value > 3) return 0;
++        g_pkb_quality = value;
++        pkb_save_settings(state->options->runtime_settings_path);
++        return 1;
++    }
++    if (std::strncmp(item->key, kPkbPadPrefix, 8) == 0 && item->key[8] >= '0' && item->key[8] <= '9') {
++        g_pkb_pad[std::atoi(item->key + 8)] = value;
++        pkb_save_settings(state->options->runtime_settings_path);
++        return 1;
++    }
+     if (std::strcmp(item->key, kRuntimeMouseSensitivityKey) == 0) {
+         if (value < 10 || value > 400) return 0;
+         state->options->relative_mouse_sensitivity =
+@@ -1265,6 +1352,17 @@
+         if (state->running) *state->running = false;
+         return 1;
+     }
++    if (std::strcmp(item->key, kPkbRestartKey) == 0 && state->options) {
++        pkb_save_settings(state->options->runtime_settings_path);
++        pkb_request_restart(state->options->runtime_settings_path);
++        if (state->running) *state->running = false;
++        return 1;
++    }
++    if (std::strcmp(item->key, kPkbPadResetKey) == 0 && state->options) {
++        for (int i = 0; i < 12; ++i) g_pkb_pad[i] = kPkbPadDefault[i];
++        pkb_save_settings(state->options->runtime_settings_path);
++        return 1;
++    }
+     return 0;
+ }
+ 
+@@ -1322,7 +1420,8 @@
+                                    RecompRuntimeUiInput* input) {
+     if (!input) return false;
+     switch (button) {
+-        case SDL_CONTROLLER_BUTTON_START:
++        case SDL_CONTROLLER_BUTTON_GUIDE:       // pokeblack-recomp: Start fica para o jogo
++        case SDL_CONTROLLER_BUTTON_LEFTSTICK:
+             *input = RECOMP_RUNTIME_UI_INPUT_TOGGLE;
+             return true;
+         case SDL_CONTROLLER_BUTTON_BACK:
+@@ -1778,7 +1877,7 @@
+              ? static_cast<uint64_t>(SDL_WINDOW_OPENGL) : 0u);
+     presentation.windows[0] = create_window(
+         presentation.separate ? "ndsrecomp - Top Screen"
+-                               : "ndsrecomp firmware preview",
++                               : "Pokemon Black",
+         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+         (presentation.separate ? presentation.screen_widths[0]
+                                : presentation.canvas_width) * kWindowScale,
+@@ -2405,20 +2504,49 @@
+     nds_set_touch(0, 0, false);
+     bool running = true;
+     RuntimeMenuState runtime_menu_state{&options, &running, false};
++    pkb_load_settings(options.runtime_settings_path);
++    static const char* const kPkbQualityNames[] = {"ORIGINAL", "BAIXO", "MEDIO", "ALTO"};
++    static const char* const kPkbPadNames[] = {
++        "NENHUM", "SUL (A XBOX / X PS)", "LESTE (B XBOX / O PS)", "OESTE (X XBOX / QUADRADO)",
++        "NORTE (Y XBOX / TRIANGULO)", "SELECT / VIEW / SHARE", "START / MENU / OPTIONS",
++        "LB / L1", "RB / R1", "R3 (ANALOGICO DIREITO)", "CIMA", "BAIXO", "ESQUERDA", "DIREITA"};
++    static const int kPkbPadValues[] = {
++        -1, SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_B, SDL_CONTROLLER_BUTTON_X,
++        SDL_CONTROLLER_BUTTON_Y, SDL_CONTROLLER_BUTTON_BACK, SDL_CONTROLLER_BUTTON_START,
++        SDL_CONTROLLER_BUTTON_LEFTSHOULDER, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
++        SDL_CONTROLLER_BUTTON_RIGHTSTICK, SDL_CONTROLLER_BUTTON_DPAD_UP,
++        SDL_CONTROLLER_BUTTON_DPAD_DOWN, SDL_CONTROLLER_BUTTON_DPAD_LEFT,
++        SDL_CONTROLLER_BUTTON_DPAD_RIGHT};
++    constexpr size_t kPkbPadCount = sizeof(kPkbPadValues) / sizeof(kPkbPadValues[0]);
++#define PKB_PAD_ITEM(n, label) \
++        {"pkb.pad." #n, "Controle", label, "Botao do controle que aperta este botao do DS.", \
++         RECOMP_RUNTIME_UI_CHOICE, 0, 0, 1, kPkbPadNames, kPkbPadCount, kPkbPadValues}
+     static const RecompRuntimeUiItem runtime_menu_items[] = {
+-        {kRuntimeMouseSensitivityKey, "Input", "Mouse sensitivity",
+-         "Prime Controls relative aim speed.",
+-         RECOMP_RUNTIME_UI_INT, 10, 400, 1, nullptr, 0, nullptr},
+-        {kRuntimeResumeKey, "System", "Resume game",
+-         "Close settings and return to the game.",
++        {kPkbQualityKey, "Graficos", "Qualidade grafica",
++         "Original = DS puro. Baixo 2x, Medio 3x + suavizacao, Alto 4x + suavizacao maxima. "
++         "Vale ao reiniciar.",
++         RECOMP_RUNTIME_UI_CHOICE, 0, 3, 1, kPkbQualityNames, 4, nullptr},
++        {kPkbRestartKey, "Graficos", "Reiniciar para aplicar",
++         "Salva e reabre o jogo com a nova qualidade (salve no jogo antes!).",
++         RECOMP_RUNTIME_UI_ACTION, 0, 0, 0, nullptr, 0, nullptr},
++        PKB_PAD_ITEM(0, "DS A"), PKB_PAD_ITEM(1, "DS B"), PKB_PAD_ITEM(10, "DS X"),
++        PKB_PAD_ITEM(11, "DS Y"), PKB_PAD_ITEM(9, "DS L"), PKB_PAD_ITEM(8, "DS R"),
++        PKB_PAD_ITEM(3, "DS START"), PKB_PAD_ITEM(2, "DS SELECT"),
++        PKB_PAD_ITEM(6, "DS CIMA"), PKB_PAD_ITEM(7, "DS BAIXO"),
++        PKB_PAD_ITEM(5, "DS ESQUERDA"), PKB_PAD_ITEM(4, "DS DIREITA"),
++        {kPkbPadResetKey, "Controle", "Restaurar padrao",
++         "Volta o mapeamento do controle ao original.",
++         RECOMP_RUNTIME_UI_ACTION, 0, 0, 0, nullptr, 0, nullptr},
++        {kRuntimeResumeKey, "Sistema", "Voltar ao jogo",
++         "Fecha o menu.",
+          RECOMP_RUNTIME_UI_ACTION, 0, 0, 0, nullptr, 0, nullptr},
+-        {kRuntimeQuitKey, "System", "Quit",
+-         "Close the runner.",
++        {kRuntimeQuitKey, "Sistema", "Sair",
++         "Fecha o jogo (salve no jogo antes!).",
+          RECOMP_RUNTIME_UI_ACTION, 0, 0, 0, nullptr, 0, nullptr},
+     };
+     RecompRuntimeUiConfig runtime_menu_config{};
+-    runtime_menu_config.title = "Metroid Prime Hunters";
+-    runtime_menu_config.subtitle = "Runtime Settings";
++    runtime_menu_config.title = "Pokemon Black";
++    runtime_menu_config.subtitle = "Configuracoes (Esc / Guide / L3)";
+     runtime_menu_config.items = runtime_menu_items;
+     runtime_menu_config.item_count =
+         sizeof(runtime_menu_items) / sizeof(runtime_menu_items[0]);
+@@ -2429,8 +2557,8 @@
+     runtime_menu_config.callbacks.is_enabled = runtime_menu_is_enabled;
+     runtime_menu_config.callbacks.save = runtime_menu_save;
+     runtime_menu_config.theme = "nds";
+-    runtime_menu_config.accept_label = "A / Enter";
+-    runtime_menu_config.back_label = "B / Backspace";
++    runtime_menu_config.accept_label = "A / ENTER";
++    runtime_menu_config.back_label = "B / BACKSPACE";
+     RecompRuntimeUi* runtime_ui =
+         recomp_runtime_ui_create(&runtime_menu_config);
+     if (!runtime_ui) {
+@@ -4147,8 +4275,7 @@
+                 ? "ndsrecomp - " + savestate_notice
+                 : presentation.separate
+                 ? "ndsrecomp - Top Screen - " + fps_text + governor_text
+-                : "ndsrecomp firmware preview - " + fps_text +
+-                      governor_text;
++                : "Pokemon Black - " + fps_text + "  (Esc: menu)";
+             SDL_SetWindowTitle(presentation.windows[0],
+                                top_title.c_str());
+             if (presentation.separate) {
+diff -ruN a/runner/src/melonds_compute/ComputeHost.cpp b/runner/src/melonds_compute/ComputeHost.cpp
+--- a/runner/src/melonds_compute/ComputeHost.cpp	2026-10-31 11:42:47.308016764 +0000
++++ b/runner/src/melonds_compute/ComputeHost.cpp	2026-10-31 11:42:47.310016764 +0000
+@@ -170,6 +170,35 @@
+     return 0;
+ }
+ 
++// pokeblack-recomp (patch 0007): funções 4.2+ ausentes no OpenGL 4.1 do macOS.
++// glMemoryBarrier só ordena escritas de compute/imagem (não usadas no caminho OpenGL):
++// vira no-op. glTexStorage3D vira glTexImage3D (uma camada de mip, como é usado aqui).
++static GLint g_pkb_uloc[15] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14};
++#define PKB_U(n) g_pkb_uloc[n]
++static void APIENTRY pkb_noop_memory_barrier(GLbitfield) {}
++static GLenum pkb_format_for(GLenum internal) {
++    switch (internal) {
++        case GL_RGBA8UI: case GL_RGBA16UI: case GL_RGBA32UI: case GL_R8UI: case GL_R16UI:
++        case GL_R32UI: case GL_RG8UI: case GL_RG16UI: case GL_RG32UI:
++            return GL_RGBA_INTEGER;
++        default: return GL_RGBA;
++    }
++}
++static void APIENTRY pkb_tex_storage_3d(GLenum target, GLsizei levels, GLenum internal,
++                                        GLsizei w, GLsizei h, GLsizei d) {
++    const GLenum fmt = pkb_format_for(internal);
++    const GLenum type = fmt == GL_RGBA_INTEGER ? GL_UNSIGNED_BYTE : GL_UNSIGNED_BYTE;
++    for (GLsizei i = 0; i < (levels > 0 ? levels : 1); ++i) {
++        glTexImage3D(target, i, internal, w, h, d, 0, fmt, type, nullptr);
++        w = w > 1 ? w / 2 : 1; h = h > 1 ? h / 2 : 1;
++    }
++    glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, (levels > 0 ? levels : 1) - 1);
++}
++static void pkb_install_gl41_shims() {
++    if (!glad_glMemoryBarrier) glad_glMemoryBarrier = pkb_noop_memory_barrier;
++    if (!glad_glTexStorage3D) glad_glTexStorage3D = pkb_tex_storage_3d;
++}
++
+ bool start_presenter()
+ {
+     GLuint vertex = compile_shader(GL_VERTEX_SHADER, kPresentVertex);
+@@ -193,6 +222,22 @@
+         std::fprintf(stderr, "[gpu3d] direct-present link failed: %s\n", log);
+         return false;
+     }
++    // pokeblack-recomp (patch 0007): sem layout(binding) no GLSL 4.10, as unidades de
++    // textura dos samplers são definidas aqui (mesmos números de antes).
++    glUseProgram(g_present_program);
++    {
++        static const char* const kSamplers[] = {"tex3d", "texObject", "texFallback", "tex3dHi",
++                                                "texHdTop", "texHdBelow", "texRaster"};
++        static const GLint kUnits[] = {0, 1, 2, 3, 4, 5, 6};
++        for (int i = 0; i < 7; ++i) {
++            const GLint loc = glGetUniformLocation(g_present_program, kSamplers[i]);
++            if (loc >= 0) glUniform1i(loc, kUnits[i]);
++        }
++        // e as posições dos uniforms (antes layout(location = N), recurso do 4.3)
++        static const char* const kUniforms[15] = {"directMode", "outputWidth", "frameRenderXPos", "frameBackdrop", "frameBldcnt", "frameEva", "frameEvb", "frameEvy", "frameMasterBright", "framePriority3d", "scale3d", "hdMode", "order3d", "rasterMode", "resolveSamples"};
++        for (int i = 0; i < 15; ++i) g_pkb_uloc[i] = glGetUniformLocation(g_present_program, kUniforms[i]);
++    }
++    glUseProgram(0);
+     glGenVertexArrays(1, &g_present_vao);
+     glGenTextures(2, g_fallback_texture);
+     glGenTextures(2, g_object_texture);
+@@ -289,8 +334,16 @@
+         return fail_or_fallback("SDL video initialization");
+     }
+ 
++#if defined(__APPLE__) && defined(NDS_USE_NATIVE_GL)
++    // pokeblack-recomp (patch 0007): o macOS só tem OpenGL 4.1 core. O rasterizador
++    // OpenGL do melonDS e o apresentador funcionam em 4.1 (sem compute shaders).
++    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
++    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
++    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
++#else
+     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
++#endif
+     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                         SDL_GL_CONTEXT_PROFILE_CORE);
+     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, presentation_window ? 1 : 0);
+@@ -315,12 +368,19 @@
+                      SDL_GetError());
+         return fail_or_fallback("OpenGL 4.3 context creation");
+     }
++#if defined(__APPLE__) && defined(NDS_USE_NATIVE_GL)
++    if (!gladLoadGLLoader(
++            reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress)) ||
++        !GLAD_GL_VERSION_4_1) {
++#else
+     if (!gladLoadGLLoader(
+             reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress)) ||
+         !GLAD_GL_VERSION_4_3) {
++#endif
+         std::fprintf(stderr, "[gpu3d] OpenGL 4.3 unavailable\n");
+         return fail_or_fallback("OpenGL 4.3 unavailable");
+     }
++    pkb_install_gl41_shims();
+     capture_gl_identity();
+     std::fprintf(stderr, "[gpu3d] OpenGL %s / %s\n",
+                  nds_compute_host_gl_version(),
+@@ -491,11 +551,11 @@
+     glBindTexture(GL_TEXTURE_2D, g_object_texture[buffer]);
+     glActiveTexture(GL_TEXTURE2);
+     glBindTexture(GL_TEXTURE_2D, g_fallback_texture[buffer]);
+-    glUniform1ui(0, direct_frame ? 1u : 0u);
+-    glUniform1ui(1, static_cast<GLuint>(width));
+-    glUniform1ui(11, hd_active ? 1u : 0u);
+-    glUniform1ui(13, direct_frame && direct_frame->raster_params && !hd_active ? 1u : 0u);
+-    glUniform1ui(14, antialiasing);
++    glUniform1ui(PKB_U(0), direct_frame ? 1u : 0u);
++    glUniform1ui(PKB_U(1), static_cast<GLuint>(width));
++    glUniform1ui(PKB_U(11), hd_active ? 1u : 0u);
++    glUniform1ui(PKB_U(13), direct_frame && direct_frame->raster_params && !hd_active ? 1u : 0u);
++    glUniform1ui(PKB_U(14), antialiasing);
+     if (hd_active) {
+         glActiveTexture(GL_TEXTURE3);
+         glBindTexture(GL_TEXTURE_2D, hires_texture);
+@@ -503,15 +563,15 @@
+         glBindTexture(GL_TEXTURE_2D, g_hd_top_texture[buffer]);
+         glActiveTexture(GL_TEXTURE5);
+         glBindTexture(GL_TEXTURE_2D, g_hd_below_texture[buffer]);
+-        glUniform1ui(10, nds_gpu3d_internal_scale());
+-        glUniform1ui(12, hd.order_3d);
+-        glUniform1ui(2, hd.render_xpos);
+-        glUniform1ui(4, hd.bldcnt);
+-        glUniform1ui(5, hd.eva);
+-        glUniform1ui(6, hd.evb);
+-        glUniform1ui(7, hd.evy);
+-        glUniform1ui(8, hd.master_bright);
+-        glUniform1ui(9, hd.priority_3d);
++        glUniform1ui(PKB_U(10), nds_gpu3d_internal_scale());
++        glUniform1ui(PKB_U(12), hd.order_3d);
++        glUniform1ui(PKB_U(2), hd.render_xpos);
++        glUniform1ui(PKB_U(4), hd.bldcnt);
++        glUniform1ui(PKB_U(5), hd.eva);
++        glUniform1ui(PKB_U(6), hd.evb);
++        glUniform1ui(PKB_U(7), hd.evy);
++        glUniform1ui(PKB_U(8), hd.master_bright);
++        glUniform1ui(PKB_U(9), hd.priority_3d);
+         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+     } else if (direct_frame) {
+         // Sample the high-resolution surface only when one actually exists;
+@@ -524,18 +584,18 @@
+         glBindTexture(GL_TEXTURE_2D, nds_gpu3d_compute_output_texture());
+         glActiveTexture(GL_TEXTURE3);
+         glBindTexture(GL_TEXTURE_2D, hires);
+-        glUniform1ui(10, static_cast<GLuint>(scale));
+-        glUniform1ui(2, direct_frame->render_xpos);
+-        glUniform3ui(3,
++        glUniform1ui(PKB_U(10), static_cast<GLuint>(scale));
++        glUniform1ui(PKB_U(2), direct_frame->render_xpos);
++        glUniform3ui(PKB_U(3),
+             direct_frame->backdrop_color & 0x3Fu,
+             (direct_frame->backdrop_color >> 8) & 0x3Fu,
+             (direct_frame->backdrop_color >> 16) & 0x3Fu);
+-        glUniform1ui(4, direct_frame->bldcnt);
+-        glUniform1ui(5, direct_frame->eva);
+-        glUniform1ui(6, direct_frame->evb);
+-        glUniform1ui(7, direct_frame->evy);
+-        glUniform1ui(8, direct_frame->master_bright);
+-        glUniform1ui(9, direct_frame->priority_3d);
++        glUniform1ui(PKB_U(4), direct_frame->bldcnt);
++        glUniform1ui(PKB_U(5), direct_frame->eva);
++        glUniform1ui(PKB_U(6), direct_frame->evb);
++        glUniform1ui(PKB_U(7), direct_frame->evy);
++        glUniform1ui(PKB_U(8), direct_frame->master_bright);
++        glUniform1ui(PKB_U(9), direct_frame->priority_3d);
+         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+     }
+     glBindVertexArray(g_present_vao);
+diff -ruN a/runner/src/melonds_compute/PresentShaders.h b/runner/src/melonds_compute/PresentShaders.h
+--- a/runner/src/melonds_compute/PresentShaders.h	2026-10-31 11:42:47.308016764 +0000
++++ b/runner/src/melonds_compute/PresentShaders.h	2026-10-31 11:42:47.311016764 +0000
+@@ -2,7 +2,7 @@
+ #pragma once
+ namespace nds_compute_present {
+ inline constexpr const char* kPresentVertex = R"GLSL(
+-#version 430 core
++#version 410 core
+ out vec2 uv;
+ void main()
+ {
+@@ -13,37 +13,37 @@
+ )GLSL";
+ 
+ inline constexpr const char* kPresentFragment = R"GLSL(
+-#version 430 core
+-layout(binding = 0) uniform usampler2D tex3d;
+-layout(binding = 1) uniform usampler2D texObject;
+-layout(binding = 2) uniform usampler2D texFallback;
++#version 410 core
++uniform usampler2D tex3d;
++uniform usampler2D texObject;
++uniform usampler2D texFallback;
+ // Internal-resolution (HD) 3D surface. Same RGB6/alpha5 values as tex3d,
+ // stored normalized by 63 and 31 in UNORM8. Both quantizations are injective
+ // into 8 bits, so the inverse round below recovers the exact integers and the
+ // DS blend math downstream stays integer-identical to the native path.
+-layout(binding = 3) uniform sampler2D tex3dHi;
+-layout(location = 0) uniform uint directMode;
+-layout(location = 1) uniform uint outputWidth;
+-layout(location = 2) uniform uint frameRenderXPos;
+-layout(location = 3) uniform uvec3 frameBackdrop;
+-layout(location = 4) uniform uint frameBldcnt;
+-layout(location = 5) uniform uint frameEva;
+-layout(location = 6) uniform uint frameEvb;
+-layout(location = 7) uniform uint frameEvy;
+-layout(location = 8) uniform uint frameMasterBright;
+-layout(location = 9) uniform uint framePriority3d;
+-layout(location = 10) uniform uint scale3d;
++uniform sampler2D tex3dHi;
++uniform uint directMode;
++uniform uint outputWidth;
++uniform uint frameRenderXPos;
++uniform uvec3 frameBackdrop;
++uniform uint frameBldcnt;
++uniform uint frameEva;
++uniform uint frameEvb;
++uniform uint frameEvy;
++uniform uint frameMasterBright;
++uniform uint framePriority3d;
++uniform uint scale3d;
+ // HD composite: the 2D stack resolved with the 3D layer removed. See
+ // NdsGpu2dHdFrame. Non-zero hdMode selects this path over the OBJ-only one.
+-layout(binding = 4) uniform usampler2D texHdTop;
+-layout(binding = 5) uniform usampler2D texHdBelow;
+-layout(location = 11) uniform uint hdMode;
+-layout(location = 12) uniform uint order3d;
+-layout(binding = 6) uniform usampler2D texRaster;
+-layout(location = 13) uniform uint rasterMode;
++uniform usampler2D texHdTop;
++uniform usampler2D texHdBelow;
++uniform uint hdMode;
++uniform uint order3d;
++uniform usampler2D texRaster;
++uniform uint rasterMode;
+ // Additional samples come from the real higher-resolution 3D raster. Keep
+ // the native 2D coordinate fixed across samples so HUD text remains crisp.
+-layout(location = 14) uniform uint resolveSamples;
++uniform uint resolveSamples;
+ uint renderXPos, bldcnt, eva, evb, evy, masterBright, priority3d;
+ uvec3 backdrop;
+ in vec2 uv;

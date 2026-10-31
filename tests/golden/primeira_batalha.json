@@ -1,0 +1,30 @@
+{
+ "route": "primeira_batalha",
+ "gravado": "Mac M2, runner SDL3, build de 30/10 noite (ARM9 principal+ARM7 nativos, overlays interpretados); conferido a olho: batalha Snivy, batalha Oshawott, volta ao quarto",
+ "frames": {
+  "7000": {
+   "A": "32ba225e0836b43ac32916f38aa760aa29af1394",
+   "B": "9ecc5dc9438a40214adb8306f2d30f4bc58223e1"
+  },
+  "16700": {
+   "A": "d7bad27487d88ddca938e4de5de99eb2b20e58c6",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  },
+  "17300": {
+   "A": "1561d3c4c13914b71b918f5e13f425a03ab62ca9",
+   "B": "d78023e22c116685fe39f8206202eba575c1731c"
+  },
+  "21000": {
+   "A": "e26459842adb4d9d7c0704b8b4a90025b97297ff",
+   "B": "d87775d8ebe68d18e90b496e4f631e151753a20a"
+  },
+  "29000": {
+   "A": "ace0ea27317f3ddbca453e8388c87dcaf9ce640d",
+   "B": "637e9f1b085c3041353a661a69d9c262b9982c17"
+  },
+  "31000": {
+   "A": "4a2fd8859810dfbc10df368154b1f8d0e47b2e62",
+   "B": "16d6db41a5fda1d775453c7edd9ffd82a4fa9aef"
+  }
+ }
+}

@@ -1,0 +1,75 @@
+diff -ruN a/runner/CMakeLists.txt b/runner/CMakeLists.txt
+--- a/runner/CMakeLists.txt	2026-10-31 10:37:09.458014886 +0000
++++ b/runner/CMakeLists.txt	2026-10-31 10:37:09.462014886 +0000
+@@ -1034,6 +1034,8 @@
+ if(NDS_ENABLE_COMPUTE_RENDERER AND NDS_SDL_BACKEND STREQUAL "NONE")
+     message(FATAL_ERROR "NDS_ENABLE_COMPUTE_RENDERER requires NDS_SDL_BACKEND=SDL3 or SDL2")
+ endif()
++find_package(ZLIB REQUIRED)  # pokeblack-recomp: cartucho.pkb
++target_link_libraries(nds_runner PRIVATE ZLIB::ZLIB)
+ if(CMAKE_DL_LIBS)
+     target_link_libraries(nds_runner PRIVATE ${CMAKE_DL_LIBS})
+ endif()
+diff -ruN a/runner/src/main.cpp b/runner/src/main.cpp
+--- a/runner/src/main.cpp	2026-10-31 10:37:09.456014886 +0000
++++ b/runner/src/main.cpp	2026-10-31 10:37:09.459014886 +0000
+@@ -1685,7 +1685,7 @@
+         fw = read_file(cli_firmware_path.empty() ? (dir + "/firmware.bin")
+                                                  : cli_firmware_path);
+     }
+-    auto rom = rom_path.empty() ? std::vector<uint8_t>{} : read_file(rom_path);
++    auto rom = rom_path.empty() ? std::vector<uint8_t>{} : pkb_read_cart(rom_path, read_file);
+     std::string rom_sha1;
+     bool sm64ds_wide_policy = false;
+     bool mph_mouse_aim_policy = false;
+diff -ruN a/runner/src/pkb_overlay_banks.cpp b/runner/src/pkb_overlay_banks.cpp
+--- a/runner/src/pkb_overlay_banks.cpp	2026-10-31 10:37:09.457014886 +0000
++++ b/runner/src/pkb_overlay_banks.cpp	2026-10-31 10:37:09.460014886 +0000
+@@ -14,6 +14,8 @@
+ #include <string>
+ #include <vector>
+ #include <algorithm>
++#include <fstream>
++#include <zlib.h>
+ 
+ void pkb_load_overlay_banks(const char* rom_sha1) {
+     if (!rom_sha1 || std::strcmp(rom_sha1, "26ad0b9967aa279c4a266ee69f52b9b2332399a5") != 0) return;
+@@ -50,3 +52,25 @@
+     std::fprintf(stderr, "[pkb] bancos de overlay: %u carregados, %u falhas, %u entradas de despacho (%s)\n",
+                  ok, falhas, funcoes, dir);
+ }
++
++// Formato cartucho.pkb (tools/empacotar.py): "PKBCART1" | u64 tamanho original | u64 tamanho útil |
++// 20 bytes SHA-1 do original | zlib(bytes úteis). O resto até o tamanho original é 0xFF (enchimento).
++std::vector<uint8_t> pkb_read_cart(const std::string& path,
++                                   std::vector<uint8_t> (*read_raw)(const std::string&)) {
++    if (path.size() < 4 || path.compare(path.size() - 4, 4, ".pkb") != 0) return read_raw(path);
++    std::ifstream f(path, std::ios::binary);
++    char magic[8] = {}; uint64_t orig = 0, util = 0; unsigned char sha[20];
++    f.read(magic, 8); f.read((char*)&orig, 8); f.read((char*)&util, 8); f.read((char*)sha, 20);
++    if (!f || std::memcmp(magic, "PKBCART1", 8) != 0 || util > orig || orig > (1ull << 30)) {
++        std::fprintf(stderr, "[pkb] cartucho inválido: %s\n", path.c_str()); return {};
++    }
++    std::vector<char> z((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
++    std::vector<uint8_t> out(orig, 0xFF);
++    uLongf n = (uLongf)util;
++    if (uncompress(out.data(), &n, (const Bytef*)z.data(), (uLong)z.size()) != Z_OK || n != util) {
++        std::fprintf(stderr, "[pkb] cartucho corrompido: %s\n", path.c_str()); return {};
++    }
++    std::fprintf(stderr, "[pkb] cartucho embutido: %s (%llu bytes, %zu comprimidos)\n", path.c_str(),
++                 (unsigned long long)orig, z.size());
++    return out;  // o runner confere o SHA-1 ao registrar os bancos do título
++}
+diff -ruN a/runner/src/pkb_overlay_banks.h b/runner/src/pkb_overlay_banks.h
+--- a/runner/src/pkb_overlay_banks.h	2026-10-31 10:37:09.457014886 +0000
++++ b/runner/src/pkb_overlay_banks.h	2026-10-31 10:37:09.460014886 +0000
+@@ -1,3 +1,9 @@
+ #pragma once
+ // pokeblack-recomp: carrega bancos de overlay compilados como bibliotecas (um por overlay).
+ void pkb_load_overlay_banks(const char* rom_sha1);
++#include <cstdint>
++#include <string>
++#include <vector>
++// pokeblack-recomp (patch 0006): lê o "cartucho" do app (cartucho.pkb, zlib) ou, se não for .pkb, o arquivo cru.
++std::vector<uint8_t> pkb_read_cart(const std::string& path,
++                                   std::vector<uint8_t> (*read_raw)(const std::string&));

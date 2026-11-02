@@ -5,7 +5,11 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"; cd "$RAIZ"
 APP="local/app/Pokemon Black.app"; C="$APP/Contents"
 rm -rf "$APP"; mkdir -p "$C/MacOS" "$C/Resources/banks" "$C/Frameworks"
-echo "PROGRESSO 1/6"; python3 tools/empacotar.py rom/*.nds "$C/Resources/cartucho.pkb"
+echo "PROGRESSO 1/6"; DADOS=""   # M7: com tradução em local/traducao/ptbr, embute a imagem com o texto trocado
+if ls local/traducao/ptbr/*/*.txt >/dev/null 2>&1; then
+  python3 tools/texto.py aplicar --saida local/traducao/rom-ptbr.nds && DADOS="--dados local/traducao/rom-ptbr.nds"
+fi
+python3 tools/empacotar.py rom/*.nds "$C/Resources/cartucho.pkb" $DADOS
 echo "PROGRESSO 2/6"; cp local/build/runner-sdl3/nds_runner "$C/MacOS/"; cp config/pokeblack.toml "$C/Resources/"
 cp local/banks/darwin/*.dylib "$C/Resources/banks/"
 SDL=$(otool -L "$C/MacOS/nds_runner" | awk '/libSDL3/{print $1}')

@@ -67,5 +67,19 @@ módulos**: executável pequeno + uma biblioteca por overlay.
 - [ ] Controle (gamepad) e teclado remapeáveis, layouts de tela, resolução 3D alta
 - [x] (rotas com o cartucho embutido do app) Teste final: mover o `.nds` para fora da pasta e o jogo continuar abrindo e passando nas rotas
 
+### M7 — Tradução PT-BR (ferramentas; o texto nunca entra no git)
+- `tools/texto.py`: extrai/reinjeta o texto (NARCs a/0/0/2 e a/0/0/3, cifra da 5ª geração); `teste` prova
+  ida e volta byte a byte; `checar` valida comandos {F000 ...} e caracteres
+- `tools/traduzir_auto.py`: tradução automática EN→PT-BR com o Argos Translate (open source, offline),
+  nomes de Pokémon/golpes/itens protegidos, glossário, revisão automática (`local/traducao/revisao.tsv`)
+- Patch `0009`: cartucho com dados trocados mantém a identidade do original (módulos nativos continuam valendo)
+- `tools/empacotar.py --dados` + `tools/app.sh`: com `local/traducao/ptbr/` preenchida, o app embute o texto
+- `traduzir.command` (tradução no Mac), `traducao.command` / `traducao-teste.command` (modelo + testes), `traducao-app.command` (app em PT-BR + telas)
+- Texto traduzido caixa por caixa (BE01 limpa, BE00 rola): texto mais longo rola em vez de estourar; arquivos em outros idiomas (trocas internacionais) são pulados
+- `texto.py aplicar` mantém os textos DENTRO da região DS do cartucho (cabeçalho 0x90): cartuchos DSi-enhanced
+  em modo DS não leem além dela. Os NARCs de texto crescem no lugar; se faltar espaço, esvazia Pokédex de
+  outros idiomas (só usadas por Pokémon estrangeiros da 4ª geração), na ordem JP kanji, JP kana, DE, IT, FR, ES
+- Pendente: glifos õ Â Ã Ê Í Ó Ô Õ Ú Ç na fonte; medidor de largura em pixels; rótulos de largura fixa
+
 Fora de escopo: online (GTS, Global Link, Dream World), multiplayer local, outras plataformas.
 O `.app` contém dados do jogo: é para uso pessoal, não para distribuir.

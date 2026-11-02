@@ -87,12 +87,14 @@ def main():
     ap.add_argument("--diag", action="store_true", help="salva tier3_coverage e a RAM no fim")
     ap.add_argument("--sem-reset", action="store_true", help="não reinicia entre pontos (mais rápido)")
     ap.add_argument("--gravar", action="store_true", help="grava o golden em vez de comparar")
+    ap.add_argument("--saida", default="", help="pasta dos PNG/resultado (padrão local/rotas/<rota>)")
     a = ap.parse_args()
 
-    rota = json.loads((RAIZ / f"tests/routes/{a.nome}.json").read_text())
+    arq = Path(a.nome) if a.nome.endswith(".json") else RAIZ / f"tests/routes/{a.nome}.json"   # aceita caminho
+    rota = json.loads(arq.read_text()); a.nome = arq.stem
     gpath = RAIZ / f"tests/golden/{a.nome}.json"  # um golden só: com o MAC fixo, VM e Mac dão o mesmo
     golden = json.loads(gpath.read_text())["frames"] if gpath.exists() else {}
-    out = RAIZ / f"local/rotas/{a.nome}"; out.mkdir(parents=True, exist_ok=True)
+    out = Path(a.saida).resolve() if a.saida else RAIZ / f"local/rotas/{a.nome}"; out.mkdir(parents=True, exist_ok=True)
     rom = Path(a.rom).resolve() if a.rom else sorted((RAIZ / "rom").glob("*.nds"))[0]
     runner = Path(a.runner).resolve()
     cmd = [str(runner), str(runner.parent), "--serve", "--port", str(a.porta),

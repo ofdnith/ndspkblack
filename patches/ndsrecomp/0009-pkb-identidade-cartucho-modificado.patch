@@ -1,0 +1,48 @@
+diff -ruN a/runner/src/main.cpp b/runner/src/main.cpp
+--- a/runner/src/main.cpp	2026-11-02 03:39:34.751007983 +0000
++++ b/runner/src/main.cpp	2026-11-02 03:39:34.773007983 +0000
+@@ -1739,6 +1739,11 @@
+             return 1;
+         }
+         rom_sha1 = gba::sha1(rom.data(), rom.size()).hex();
++        if (pkb_cart_sha1()[0] && rom_sha1 != pkb_cart_sha1()) {  // pokeblack-recomp 0009: dados trocados
++            std::fprintf(stderr, "[pkb] cartucho modificado (%s); identidade do original %s\n",
++                         rom_sha1.c_str(), pkb_cart_sha1());
++            rom_sha1 = pkb_cart_sha1();
++        }
+         std::fprintf(stderr, "[load] cartridge: %zu bytes, SHA-1 %s\n",
+                      rom.size(), rom_sha1.c_str());
+         if (!frontend_options.expected_rom_sha1.empty() &&
+diff -ruN a/runner/src/pkb_overlay_banks.cpp b/runner/src/pkb_overlay_banks.cpp
+--- a/runner/src/pkb_overlay_banks.cpp	2026-11-02 03:39:34.751007983 +0000
++++ b/runner/src/pkb_overlay_banks.cpp	2026-11-02 03:39:34.773007983 +0000
+@@ -53,6 +53,9 @@
+                  ok, falhas, funcoes, dir);
+ }
+ 
++std::string g_pkb_cart_sha1;
++const char* pkb_cart_sha1() { return g_pkb_cart_sha1.c_str(); }
++
+ // Formato cartucho.pkb (tools/empacotar.py): "PKBCART1" | u64 tamanho original | u64 tamanho útil |
+ // 20 bytes SHA-1 do original | zlib(bytes úteis). O resto até o tamanho original é 0xFF (enchimento).
+ std::vector<uint8_t> pkb_read_cart(const std::string& path,
+@@ -70,6 +73,10 @@
+     if (uncompress(out.data(), &n, (const Bytef*)z.data(), (uLong)z.size()) != Z_OK || n != util) {
+         std::fprintf(stderr, "[pkb] cartucho corrompido: %s\n", path.c_str()); return {};
+     }
++    // patch 0009: a identidade do título é o SHA-1 do cartucho ORIGINAL (do cabeçalho), para que um
++    // cartucho com dados trocados (tradução) continue usando os módulos nativos e a config do título.
++    static const char* hx = "0123456789abcdef"; g_pkb_cart_sha1.clear();
++    for (int i = 0; i < 20; ++i) { g_pkb_cart_sha1 += hx[sha[i] >> 4]; g_pkb_cart_sha1 += hx[sha[i] & 15]; }
+     std::fprintf(stderr, "[pkb] cartucho embutido: %s (%llu bytes, %zu comprimidos)\n", path.c_str(),
+                  (unsigned long long)orig, z.size());
+     return out;  // o runner confere o SHA-1 ao registrar os bancos do título
+diff -ruN a/runner/src/pkb_overlay_banks.h b/runner/src/pkb_overlay_banks.h
+--- a/runner/src/pkb_overlay_banks.h	2026-11-02 03:39:34.752007983 +0000
++++ b/runner/src/pkb_overlay_banks.h	2026-11-02 03:39:34.773007983 +0000
+@@ -7,3 +7,5 @@
+ // pokeblack-recomp (patch 0006): lê o "cartucho" do app (cartucho.pkb, zlib) ou, se não for .pkb, o arquivo cru.
+ std::vector<uint8_t> pkb_read_cart(const std::string& path,
+                                    std::vector<uint8_t> (*read_raw)(const std::string&));
++// patch 0009: SHA-1 do original guardado no cabeçalho do .pkb ("" se não leu um .pkb).
++const char* pkb_cart_sha1();

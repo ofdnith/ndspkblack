@@ -79,7 +79,13 @@ módulos**: executável pequeno + uma biblioteca por overlay.
 - `texto.py aplicar` mantém os textos DENTRO da região DS do cartucho (cabeçalho 0x90): cartuchos DSi-enhanced
   em modo DS não leem além dela. Os NARCs de texto crescem no lugar; se faltar espaço, esvazia Pokédex de
   outros idiomas (só usadas por Pokémon estrangeiros da 4ª geração), na ordem JP kanji, JP kana, DE, IT, FR, ES
-- Pendente: glifos õ Â Ã Ê Í Ó Ô Õ Ú Ç na fonte; medidor de largura em pixels; rótulos de largura fixa
+- Fonte: as fontes principais (a/0/2/3, NFTR 0–2) já têm Ã Õ Ç Â Ê Ô Í Ó Ú — nada a desenhar
+- Rótulos de menu: sem tradução automática; vale `local/traducao/manual.tsv` (revisão humana, EN exato → PT;
+  fica local, pois contém o texto original) e o que não estiver lá fica em inglês
+- Nome de quem fala ("Cheren: ") sai antes do tradutor e volta depois; campos com alinhamento (BD0x) são
+  traduzidos linha a linha, sem reorganizar
+- `build-e-jogar.command`: build completo e abre o app
+- Pendente: medidor de largura em pixels
 
 Fora de escopo: online (GTS, Global Link, Dream World), multiplayer local, outras plataformas.
 O `.app` contém dados do jogo: é para uso pessoal, não para distribuir.

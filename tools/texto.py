@@ -191,7 +191,7 @@ def cmd_checar(a, fonte_ok=None):
                 except Exception as e: print(f"ERRO {nome}/{k:04d}:{j:04d} escape inválido ({e})"); erros += 1; continue
                 novos_chars.update(c for c in cs if c not in orig_chars and c < 0xF000)
     if novos_chars:
-        print("AVISO: caracteres que o jogo original não usa (a fonte pode não ter): " + " ".join(chr(c) for c in sorted(novos_chars)))
+        print("AVISO: caracteres que o texto original não usa (confira na fonte): " + " ".join(chr(c) for c in sorted(novos_chars)))
     print(f"{'OK' if not erros else 'FALHOU'}: {mudadas} linhas traduzidas, {erros} erros")
     return erros
 

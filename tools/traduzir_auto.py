@@ -15,7 +15,6 @@ Proteções (cada linha):
     termos do glossário viram a forma PT fixada;
   - arquivos que são listas de nomes não passam pelo tradutor (só o glossário se aplica);
   - quebras de linha \\n refeitas pela largura da linha original;
-  - caracteres sem glifo na fonte do jogo são trocados pelo mais próximo (até a fonte ganhar os glifos).
 Revisão automática (vai para revisao.tsv): marcador perdido/duplicado (linha fica em inglês), linha que
 voltou igual ao inglês, mais linhas que o original +2, palavra repetida 3x seguidas, texto vazio.
 
@@ -28,11 +27,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent)); import texto as texto_
 RAIZ = Path(__file__).resolve().parent.parent
 T = RAIZ / "local/traducao"; ORIG = T / "original"; SAIDA = T / "ptbr"
 CACHE = T / "cache-mt.json"; GLOS = T / "glossario.tsv"; MODELO = RAIZ / "local/argos"
+MANUAL = T / "manual.tsv"     # revisão humana: EN exato<TAB>PT; vence a tradução automática
 CMD = re.compile(r"\{F000[^}]*\}")
 ANCORAS = {"Bulbasaur", "Pound", "Master Ball", "Stench"}   # identificam as listas de nomes do jogo
 # fonte do jogo: estes não existem no texto original (sem glifo garantido) → substituto provisório
-SEM_GLIFO = str.maketrans({"õ": "o", "Õ": "O", "Â": "A", "Ã": "A", "Ê": "E", "Í": "I", "Ó": "O",
-                           "Ô": "O", "Ú": "U", "Ç": "C", "“": '"', "”": '"', "‘": "'", "’": "'", "—": "-", "–": "-"})
+# as fontes principais do jogo (a/0/2/3, NFTR 0–2) têm Ã Õ Ç Â Ê Ô Í Ó Ú etc.; só traços tipográficos mudam
+SEM_GLIFO = str.maketrans({"—": "-", "–": "-"})
 GLOSSARIO_INICIAL = """# EN<TAB>PT — termos fixos (edite à vontade; linhas com # são ignoradas)
 Poké Ball\tPoké Bola
 Poké Balls\tPoké Bolas
@@ -184,6 +184,14 @@ ROLA = "{F000 BE00 0000}"
 LARG_DIALOGO = 42                                  # p95 das linhas de diálogo do jogo = 45 caracteres
 ORDEM_FIXA = re.compile(r"\{F000 (?:FF|BD)")         # cor/alinhamento: a ordem importa
 
+FALANTE = re.compile(r"^((?:\\n)?)((?:[A-Z][A-Za-zÀ-ÿ.'&\-]*)(?: [A-Z][A-Za-zÀ-ÿ.'&\-]*){0,3}|\{F000 0100 0001 000\d\}): ")
+
+def separar_falante(txt):
+    """'Cheren: fala' -> ('Cheren: ', 'fala'). O tradutor apagava o nome de quem fala."""
+    m = FALANTE.match(txt)
+    if not m: return "", txt
+    return m.group(1) + m.group(2) + ": ", txt[m.end():]
+
 def unidades(v):
     """Divide a linha em caixas: [(texto, separador)]. Linhas sem BE0x = uma unidade só."""
     partes = PAG.split(v); out = []
@@ -200,6 +208,22 @@ def montar_caixa(r, larg, dialogo):
     txt = linhas[0] + ("\\n" + linhas[1] if len(linhas) > 1 else "")
     return txt + "".join(ROLA + "\\n" + l for l in linhas[2:]), len(linhas)
 
+def manual():
+    d = {}
+    if MANUAL.exists():
+        for ln in MANUAL.read_text(encoding="utf-8").split("\n"):
+            if "\t" in ln and not ln.startswith("#"): en, pt = ln.split("\t", 1); d[en] = pt
+    return d
+
+def eh_rotulo(p, v):
+    """Rótulo curto de interface (menus): sem tradução automática — fica o manual ou o inglês."""
+    if "/002/" not in p.replace("\\", "/"): return False
+    f = int(Path(p).stem)
+    if 100 <= f <= 130: return True                 # listas alfabéticas de palavras do chat fácil
+    t = CMD.sub("", v).strip()
+    return ("\\n" not in v and "BE0" not in v and 1 <= len(t) <= 28
+            and not t.endswith((".", "!", "?", "...")))
+
 def mesmos_comandos(a, b):
     from collections import Counter
     if Counter(CMD.findall(a)) != Counter(CMD.findall(b)): return False
@@ -208,18 +232,22 @@ def mesmos_comandos(a, b):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--segundos", type=int, default=160)
     ap.add_argument("--so-montar", action="store_true"); a = ap.parse_args()
-    t0 = time.time(); glos = glossario(); nomes, arqs_nomes = listas_de_nomes()
+    t0 = time.time(); glos = glossario(); nomes, arqs_nomes = listas_de_nomes(); man = manual()
     prot = Protetor(nomes, glos)
     cache = json.loads(CACHE.read_text()) if CACHE.exists() else {}
+    def partes(v):
+        """Trechos que vão ao tradutor: por caixa; sem o nome do falante; linhas alinhadas uma a uma."""
+        if "BD0" in v and not PAG.search(v):
+            return [l for l in v.split("\\n") if tem_letras(l)]
+        return [separar_falante(txt)[1] for txt, _ in unidades(v) if tem_letras(separar_falante(txt)[1])]
     def chaves(v):
-        for txt, _ in unidades(v):
-            if tem_letras(txt): yield prot.proteger(segmento_para_mt(txt))
+        for txt in partes(v): yield prot.proteger(segmento_para_mt(txt))
     # 1) frases únicas a traduzir (já protegidas), caixa por caixa
     alvo = []
     for p in arquivos():
         if p in arqs_nomes: continue
         for j, v in ler(p).items():
-            if pular_linha(v): continue
+            if pular_linha(v) or v in man or eh_rotulo(p, v): continue
             alvo += [s for s, _ in chaves(v)]
     alvo = list(dict.fromkeys(alvo)); pend = [s for s in alvo if s not in cache]
     if pend and not a.so_montar:
@@ -241,16 +269,37 @@ def main():
             if p in arqs_nomes:
                 if v in glos: out.append(f"{j:04d}\t{glos[v].translate(SEM_GLIFO)}")
                 continue
-            if pular_linha(v) or not tem_letras(v): continue
+            if v in man:
+                out.append(f"{j:04d}\t{man[v].translate(SEM_GLIFO)}"); n += 1; continue
+            if pular_linha(v) or not tem_letras(v) or eh_rotulo(p, v): continue
             n_orig = v.count("\\n") + 1
             # caixa de diálogo: tem BE0x, ou tem exatamente 2 linhas (uma caixa só). Campos de 1 linha não quebram;
             # campos de 3+ linhas (descrições) quebram na largura original.
             dialogo = PAG.search(v) is not None or n_orig == 2
             larg = LARG_DIALOGO if dialogo else max(20, max(len(CMD.sub("", x)) for x in v.split("\\n")))
             nova = ""; motivo = None; avisos = []
+            if "BD0" in v and not PAG.search(v):             # campo com alinhamento: linha a linha
+                linhas = []
+                for l in v.split("\\n"):
+                    if not tem_letras(l): linhas.append(l); continue
+                    s_, tok = prot.proteger(segmento_para_mt(l))
+                    r = prot.restaurar(cache[s_], tok) if s_ in cache else None
+                    if r is None or not mesmos_comandos(r, l): motivo = "sem tradução ainda" if s_ not in cache else "marcador perdido (mantido em inglês)"; break
+                    pre = re.match(r"^((?:\{F000 BD0[^}]*\})*)", l).group(1)   # alinhamento fica no começo
+                    linhas.append(pre + r.replace(pre, "", 1) if pre and not r.startswith(pre) else r)
+                if motivo:
+                    if motivo != "sem tradução ainda": revis.append((str(rel), j, motivo))
+                    continue
+                nova = "\\n".join(linhas).translate(SEM_GLIFO)
+                try: texto_mod.str_to_chars(nova)
+                except Exception: revis.append((str(rel), j, "escape inválido (mantido em inglês)")); continue
+                out.append(f"{j:04d}\t{nova}"); n += 1; continue
             for txt, sep in unidades(v):
                 pre = "\\n" if txt.startswith("\\n") else ""
                 if not tem_letras(txt): nova += txt + sep; continue
+                quem, txt = separar_falante(txt)
+                if quem: pre = ""; quem = quem if not quem.startswith("\\n") else quem   # o \\n inicial já está em quem
+                if not tem_letras(txt): nova += quem + txt + sep; continue
                 s, tok = prot.proteger(segmento_para_mt(txt))
                 if s not in cache: motivo = "sem tradução ainda"; break
                 r = prot.restaurar(cache[s], tok)
@@ -267,6 +316,9 @@ def main():
                 if dialogo and nl > 4: avisos.append("caixa longa (rola 3+ vezes)")
                 if segmento_para_mt(r) == segmento_para_mt(txt) and len(CMD.sub("", r).split()) > 2: avisos.append("igual ao inglês")
                 if re.search(r"\b(\w+)( \1\b){2,}", r, re.I): avisos.append("palavra repetida")
+                if quem:                      # nome de quem fala volta na frente, na mesma caixa
+                    caixa, nl = montar_caixa(r, larg - len(quem.replace("\\n", "")), dialogo) if (dialogo or n_orig >= 3) else (r, 1)
+                    caixa = quem + caixa
                 nova += pre + caixa + sep
             if motivo:
                 if motivo != "sem tradução ainda": revis.append((str(rel), j, motivo))
